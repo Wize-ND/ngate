@@ -2,25 +2,26 @@ import asyncio
 import logging
 
 
-async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio.streams.StreamWriter):
+async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio.streams.StreamWriter, cfg: dict):
     """
     Main entrypoint for each connection
     """
     client = writer.get_extra_info('peername')
-    logging.getLogger(str(client))
+    log = logging.getLogger(f'remote {client[0]},{client[1]}')
+    log.debug(f"connected")
     try:
         while True:
             # reading all incoming data
             data = await reader.read(65535)
             if not data:
                 # client disconnected
-                print(f"client {client} disconnected")
+                log.debug("disconnected")
                 break
             message = data.decode()
 
-            print(f"From {client!r} received {message!r} ")
-
-            print(f"Send: {message!r}")
+            # echo logic
+            log.debug(f"Received: {message!r}")
+            log.debug(f"Sending: {message!r}")
             writer.write(message.encode())
             await writer.drain()
     finally:

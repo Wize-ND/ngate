@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import functools
 import logging
 import os
 import signal
@@ -38,12 +39,26 @@ logging.basicConfig(format='%(asctime)s - %(threadName)s - %(name)s - %(levelnam
                     level=cfg['logging']['level'],
                     filename=log_file)
 
+
+def clean_exit(signame, loop):
+    logging.info(f'got signal {signame}, shutting down')
+    loop.stop()
+
+
 async def main():
-    server = await asyncio.start_server(
-        client_connected, port=cfg['network']['port'])
+    loop = asyncio.get_event_loop()
+    # catch some termination signals
+    try:
+        for signame in {'SIGINT', 'SIGTERM'}:
+            loop.add_signal_handler(getattr(signal, signame), functools.partial(clean_exit, signame, loop))
+    except NotImplementedError:
+        pass
+
+    server = await asyncio.start_server(functools.partial(client_connected, cfg=cfg), port=cfg['network']['port'])
     logging.info(f'Start serving on {server.sockets[0].getsockname()}')
     async with server:
         await server.serve_forever()
+
 
 try:
     asyncio.run(main())
