@@ -1,21 +1,30 @@
 import asyncio
 import functools
 import hashlib
+import logging
 import re
 import uuid
 import cx_Oracle
 import ldap
+import shlex
+from models.eqm_user_session import EqmUserSession
 
 
-async def doauth(login: str, password: str, server: dict):
+async def doauth(reader: asyncio.streams.StreamReader, writer: asyncio.streams.StreamWriter, login_str: str, cfg: dict, session: EqmUserSession):
     """
     Perform login attempt
-    :param login: login
-    :param password: password
-    :param server: server dict
-    :return: False/True, error(str)/cregentials(tuple)
+    :param session: EqmUserSession
+    :param login_str: login string
+    :param cfg: config dict
+    :return: False/True, error(str)/session_parameters(dict)
     """
     loop = asyncio.get_event_loop()
+    log = logging.getLogger('auth')
+
+    # cut 'LOGIN' from login_str, and turn it to dict from space separated key=value string
+    login_dict = dict(kv.split('=') for kv in shlex.split(login_str[5:]))
+
+    # checking body
     if server['type'] == 'LOCAL':
         return await loop.run_in_executor(None, functools.partial(auth_oracle, login, password, server))
     if server['type'] == 'NGATE':
@@ -26,6 +35,7 @@ async def doauth(login: str, password: str, server: dict):
         return False, f'Unknown auth server type: {server["type"]}'
     if success:
         return True, gen_oracle_credentials(server_answer, server['key'])
+
     return False, server_answer
 
 

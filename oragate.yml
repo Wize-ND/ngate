@@ -8,6 +8,8 @@ oracle:
   # ora_service_name = service_name
   # ora_tns_name = tns_name
 
+ORAGATE_REDIRECT:
+
 network:
   port: 4200
 
@@ -15,3 +17,5 @@ logging:
   level: DEBUG
   filename: oragate.log
 
+filters:
+  - zlib

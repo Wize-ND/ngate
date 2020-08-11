@@ -3,6 +3,19 @@ import logging
 import cx_Oracle
 
 
+def get_oracle_dsn(cfg: dict):
+    if 'ora_service_name' in cfg['oracle']:
+        return cx_Oracle.makedsn(cfg['oracle']['ora_host'],
+                                 cfg['oracle']['ora_port'],
+                                 service_name=cfg['oracle']['ora_service_name'])
+    elif 'ora_tns_name' in cfg['oracle']:
+        return cfg['oracle']['ora_tns_name']
+    else:
+        return cx_Oracle.makedsn(cfg['oracle']['ora_host'],
+                                 cfg['oracle']['ora_port'],
+                                 sid=cfg['oracle']['ora_sid'])
+
+
 def default_output(cur: cx_Oracle.Cursor):
     """
     default output of fetch
@@ -27,6 +40,7 @@ class OracleConnect(object):
     """
     class to connect to oracle
     """
+
     def __init__(self, cfg):
         self.cfg = cfg
         self.logger = logging.getLogger('Oracle_connection')

@@ -4,34 +4,25 @@ import functools
 import logging
 import os
 import signal
+from pid_lock import check_lock
 import traceback
-
-import cx_Oracle
 import yaml
-
+import db
 from oragate import client_connected
 
 # Args section
 parser = argparse.ArgumentParser(description='oragate v2')
-parser.add_argument('--config_file', '-c', help='config file, YAML format', default='oragate.yml')
-parser.add_argument('--port', help="where to listen incoming requests (overrides config 'port' key)")
-parser.add_argument('--log_file', help="log filename (overrides config 'logging.filename' key)")
+parser.add_argument('--config_file', '-c', help='config file, YAML format (oragate.yml by default).', default='oragate.yml')
+parser.add_argument('--port', help="where to listen incoming requests (overrides config 'network.port' key)")
+parser.add_argument('--log_file', help="log file (overrides config 'logging.filename' key)")
+parser.add_argument('--lock_file', help="lock file (/home/equipment/run/oragate-ng.lock by default).", default='/home/equipment/run/oragate-ng.lock')
+parser.add_argument('--ldap_auth_only', help="Mode ldap-auth-only ldap_config and config variable ORAGATE_REDIRECT required).", action='store_true')
 
 args = parser.parse_args()
 cfg = yaml.safe_load(open(args.config_file))
 cfg['network']['port'] = cfg['network']['port'] or 1976
-
-if 'ora_service_name' in cfg['oracle']:
-    dsn = cx_Oracle.makedsn(cfg['oracle']['ora_host'],
-                            cfg['oracle']['ora_port'],
-                            service_name=cfg['oracle']['ora_service_name'])
-elif 'ora_tns_name' in cfg['oracle']:
-    dsn = cfg['oracle']['ora_tns_name']
-else:
-    dsn = cx_Oracle.makedsn(cfg['oracle']['ora_host'],
-                            cfg['oracle']['ora_port'],
-                            sid=cfg['oracle']['ora_sid'])
-cfg['oracle']['dsn'] = dsn
+cfg['oracle']['dsn'] = db.get_oracle_dsn(cfg)
+cfg['ldap_auth_only'] = args.ldap_auth_only
 
 # logging
 log_file = args.log_file or cfg['logging']['filename']
@@ -49,20 +40,26 @@ async def main():
     loop = asyncio.get_event_loop()
     # catch some termination signals
     try:
-        for signame in {'SIGINT', 'SIGTERM'}:
+        for signame in ('SIGINT', 'SIGTERM', 'SIGHUP', 'SIGABRT', 'SIGALRM'):
             loop.add_signal_handler(getattr(signal, signame), functools.partial(clean_exit, signame, loop))
     except NotImplementedError:
         pass
-
+    # client_connected cb passed as partial because we need some data shared, config for example
     server = await asyncio.start_server(functools.partial(client_connected, cfg=cfg), port=cfg['network']['port'])
     logging.info(f'Start serving on {server.sockets[0].getsockname()}')
     async with server:
         await server.serve_forever()
 
+check_lock(args.lock_file)
 
 try:
     asyncio.run(main())
+except KeyboardInterrupt:
+    logging.info('Program interrupted by user (KeyboardInterrupt)')
 except Exception as e:
-    logging.error(f'Server shutdown due to error: {traceback.format_exc()}')
+    logging.error(f'Server shutdown due to error: {str(e)}')
+    logging.debug(traceback.format_exc())
 finally:
+    if os.path.exists(args.lock_file):
+        os.remove(args.lock_file)
     logging.info('Server stopped')
