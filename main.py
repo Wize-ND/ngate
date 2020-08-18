@@ -51,7 +51,7 @@ async def main():
     # catch some termination signals
     try:
         for signame in ('SIGINT', 'SIGTERM', 'SIGHUP', 'SIGABRT', 'SIGALRM'):
-            loop.add_signal_handler(getattr(signal, signame), functools.partial(clean_exit, signame, loop))
+            loop.add_signal_handler(getattr(signal, signame), functools.partial(asyncio.ensure_future, clean_exit(signame, loop)))
     except NotImplementedError:
         pass
     # client_connected cb passed as partial because we need some data shared, config for example
