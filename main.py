@@ -53,8 +53,11 @@ async def main():
     server = await asyncio.start_server(functools.partial(client_connected, cfg=cfg), port=cfg['network']['port'])
     logging.info(f'Start serving on {server.sockets[0].getsockname()}')
     async with server:
-        await server.serve_forever()
-    server.close()
+        try:
+            await server.serve_forever()
+        finally:
+            await server.wait_closed()
+
 # pid lock check
 check_lock(args.lock_file)
 
