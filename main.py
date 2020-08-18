@@ -2,9 +2,10 @@ import argparse
 import asyncio
 import functools
 import logging
-import os
 import signal
-from pid_lock import check_lock
+import sys
+
+from pid_lock import check_lock, remove_lock
 import traceback
 import yaml
 import db
@@ -15,7 +16,7 @@ parser = argparse.ArgumentParser(description='oragate v2')
 parser.add_argument('--config_file', '-c', help='config file, YAML format (oragate.yml by default).', default='oragate.yml')
 parser.add_argument('--port', help="where to listen incoming requests (overrides config 'network.port' key)")
 parser.add_argument('--log_file', help="log file (overrides config 'logging.filename' key)")
-parser.add_argument('--lock_file', help="lock file (/home/equipment/run/oragate-ng.lock by default).", default='/home/equipment/run/oragate-ng.lock')
+parser.add_argument('--lock_file', help="lock file (/home/equipment/run/oragate-ng.lock by default).", default='oragate-ng.lock')
 parser.add_argument('--ldap_auth_only', help="Mode ldap-auth-only ldap_config and config variable ORAGATE_REDIRECT required).", action='store_true')
 
 args = parser.parse_args()
@@ -29,6 +30,10 @@ log_file = args.log_file or cfg['logging']['filename']
 logging.basicConfig(format='%(asctime)s - %(threadName)s - %(name)s - %(levelname)s: %(message)s',
                     level=cfg['logging']['level'],
                     filename=log_file)
+
+if args.ldap_auth_only and 'ORAGATE_REDIRECT' not in cfg:
+    logging.error('Config variable ORAGATE_REDIRECT is not defined. For ldap-auth-only mode this is mandatory')
+    sys.exit(1)
 
 
 def clean_exit(signame, loop):
@@ -50,6 +55,8 @@ async def main():
     async with server:
         await server.serve_forever()
 
+
+# pid lock check
 check_lock(args.lock_file)
 
 try:
@@ -60,6 +67,5 @@ except Exception as e:
     logging.error(f'Server shutdown due to error: {str(e)}')
     logging.debug(traceback.format_exc())
 finally:
-    if os.path.exists(args.lock_file):
-        os.remove(args.lock_file)
+    remove_lock(args.lock_file)
     logging.info('Server stopped')

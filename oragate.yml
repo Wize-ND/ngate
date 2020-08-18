@@ -1,14 +1,20 @@
 oracle:
   ora_host: 192.168.70.204
   ora_port: 1521
-  ora_user: os_sys
-  ora_pass: os_sys
   ora_sid: ORANGE
   # either one of ora_sid/ora_service_name/ora_tns_name
   # ora_service_name = service_name
   # ora_tns_name = tns_name
 
-ORAGATE_REDIRECT:
+ORAGATE_REDIRECT: 192.168.70.204
+
+#ldap:
+#  host: dc02.osinform.com
+#  bind_dn: ''
+#  password: ''
+#  base_user_dn: 'ou=orangesystem,dc=osinform,dc=com'
+#  filter_users: (&(objectCategory=Person)(sAMAccountName={})(!(userAccountControl:1.2.840.113556.1.4.803:=2)))
+#  key: A!B!C
 
 network:
   port: 4200

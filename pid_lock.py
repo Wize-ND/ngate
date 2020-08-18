@@ -12,16 +12,26 @@ def check_lock(filename):
     """
     if os.path.exists(filename):
         with open(filename, 'r') as lock_file:
-            is_running = psutil.pid_exists(int(lock_file.read()))
+            lock_pid = int(lock_file.read())
+            is_running = psutil.pid_exists(lock_pid)
         if is_running:
-            logging.warning('oragate is already running')
+            logging.warning('Lock-file exists and process is running')
             sys.exit(0)
-    else:
-        try:
-            with open(filename, 'w') as lock_file:
-                lock_file.write(str(os.getpid()))
-                lock_created = True
-        except Exception as e:
-            logging.error(f'Could not create lock-file: {str(e)}')
-            sys.exit(0)
-    return lock_created
+    try:
+        with open(filename, 'w') as lock_file:
+            lock_file.write(str(os.getpid()))
+    except Exception as e:
+        logging.error(f'Could not create lock-file: {str(e)}')
+        sys.exit(1)
+
+
+def remove_lock(filename):
+    """
+    remove lock-file if pid = os.getpid()
+    :param filename: lock-file
+    """
+    if os.path.exists(filename):
+        with open(filename, 'r') as lock_file:
+            lock_pid = int(lock_file.read())
+        if os.getpid() == lock_pid:
+            os.remove(filename)

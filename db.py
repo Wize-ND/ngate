@@ -46,9 +46,9 @@ class OracleConnect(object):
         self.logger = logging.getLogger('Oracle_connection')
         self.conn = cx_Oracle.connect(user=cfg['oracle']['ora_user'],
                                       password=cfg['oracle']['ora_pass'],
+                                      threaded=True,
                                       encoding='UTF-8',
                                       dsn=cfg['oracle']['dsn'])
-        self.conn.module = 'eqm-app-system'
 
     def __del__(self):
         try:

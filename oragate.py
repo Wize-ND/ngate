@@ -1,14 +1,15 @@
 import asyncio
 import logging
-from handlers import auth
-from models.eqm_user_session import EqmUserSession
+import traceback
 
+from handlers import auth, sql
+from models.eqm_user_session import EqmUserSession
 
 # handler funcs
 handlers = [{'prefix': 'LOGIN', 'function': auth.doauth},
-            {'prefix': 'SQL', 'function': None},
-            {'prefix': 'SELECT_LOB', 'function': None},
-            {'prefix': 'UPDATE_LOB', 'function': None}]
+            {'prefix': 'SQL', 'function': sql.sql_handle},
+            {'prefix': 'SELECT_LOB', 'function': sql.lob_handle},
+            {'prefix': 'UPDATE_LOB', 'function': sql.lob_handle}]
 
 
 async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio.streams.StreamWriter, cfg: dict):
@@ -16,27 +17,26 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
     Main entrypoint for each connection
     """
     client = writer.get_extra_info('peername')
-    session = EqmUserSession(local_ip=client[0], local_port=client[1])
-    log = logging.getLogger(f'remote {client[0]}, {client[1]}')
+    session = EqmUserSession(peer_ip=client[0], peer_port=client[1], reader=reader, writer=writer, oragate_cfg=cfg)
+    log = logging.getLogger(f'Remote {client[0]}, {client[1]}')
     log.debug(f"connected")
     try:
         while True:
             # reading all incoming data
-            data = await reader.read(65535)
+            data = await reader.read(65536)
             if not data:
                 # client disconnected
                 log.debug("disconnected")
                 break
             message = data.decode()
-
-            log.debug(f"Received: {message!r}")
             # function logic
             for handler in handlers:
                 if message.startswith(handler['prefix']):
-                    await handler['function'](reader, writer, message, cfg, session)
+                    await handler['function'](message, session)
 
-            log.debug(f"Sending: {message!r}")
-            writer.write(message.encode())
-            await writer.drain()
+    except Exception as e:
+        log.error(str(e))
+        log.debug(traceback.format_exc())
+        await session.send_bad_result(str(e))
     finally:
         writer.close()
