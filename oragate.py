@@ -33,7 +33,7 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
             for handler in handlers:
                 if message.startswith(handler['prefix']):
                     await handler['function'](message, session)
-    except asyncio.IncompleteReadError:
+    except (asyncio.IncompleteReadError, asyncio.CancelledError):
         pass
     except Exception as e:
         log.error(str(e))
