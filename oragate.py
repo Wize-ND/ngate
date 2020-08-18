@@ -26,7 +26,7 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
             data = await reader.readuntil(session.eof.encode())
             if not data:
                 # client disconnected
-                log.debug("disconnected")
+                log.debug(f"disconnected")
                 break
             message = data.decode()
             # function logic
