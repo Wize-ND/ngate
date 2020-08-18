@@ -40,6 +40,8 @@ datatypes = {cx_Oracle.DB_TYPE_BINARY_DOUBLE: 'N',
              cx_Oracle.DB_TYPE_ROWID: 'W',
              cx_Oracle.DB_TYPE_CHAR: 'W'}
 
+empty_lob = {cx_Oracle.DB_TYPE_CLOB: 'empty_clob()', cx_Oracle.DB_TYPE_BLOB: 'empty_blob()'}
+
 
 def get_column_type(name, col_type, display_size, internal_size, precision, scale, null_ok):
     name = special_encode(name)
@@ -122,12 +124,16 @@ async def lob_handle(message: str, session: EqmUserSession):
 
         if command == 'UPDATE_LOB':
             lob_size = int(re.findall('size="(\d+)"', message)[0])
-
-            sql = f'UPDATE {table} set {field}=empty_blob() where {where} returning {field} into :lob_var'
-            log.debug(sql)
             with session.db_conn.cursor() as cur:
-                lob_var = cur.var(cx_Oracle.DB_TYPE_BLOB)
-                await loop.run_in_executor(None, functools.partial(cur.execute, sql, lob_var=lob_var))
+                # gettin' lob type via select_sql
+                select_sql = f'SELECT {field} from {table} where {where}'
+                await loop.run_in_executor(None, functools.partial(cur.execute, select_sql))
+                lob_type = cur.description[0][1]
+                lob_var = cur.var(lob_type)
+                # updating lob via update_sql
+                update_sql = f'UPDATE {table} set {field}={empty_lob[lob_type]} where {where} returning {field} into :lob_var'
+                log.debug(update_sql)
+                await loop.run_in_executor(None, functools.partial(cur.execute, update_sql, lob_var=lob_var))
                 lob, = lob_var.getvalue()
                 await session.send_line('* READY')
                 chunk = lob.getchunksize() * 8
