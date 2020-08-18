@@ -80,6 +80,7 @@ def format_bind_value(str: str):
 async def sql_handle(message: str, session: EqmUserSession):
     loop = asyncio.get_event_loop()
     log = logging.getLogger('sql_handle')
+    log.debug(message)
     sql, full, binds_str = re.findall('query="(.*)" bind_values(_full)?="(.*)"', message)[0]
     for c in special_chars:
         sql = sql.replace(special_chars[c], c)

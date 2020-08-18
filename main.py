@@ -21,7 +21,7 @@ parser.add_argument('--ldap_auth_only', help="Mode ldap-auth-only ldap_config an
 
 args = parser.parse_args()
 cfg = yaml.safe_load(open(args.config_file))
-cfg['network']['port'] = cfg['network']['port'] or 1976
+cfg['network']['port'] = args.port or cfg['network']['port'] or 1976
 cfg['oracle']['dsn'] = db.get_oracle_dsn(cfg)
 cfg['ldap_auth_only'] = args.ldap_auth_only
 
