@@ -23,7 +23,7 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
     try:
         while True:
             # reading all incoming data
-            data = await reader.read(65536)
+            data = await reader.readuntil(session.eof.encode())
             if not data:
                 # client disconnected
                 log.debug("disconnected")
@@ -33,7 +33,8 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
             for handler in handlers:
                 if message.startswith(handler['prefix']):
                     await handler['function'](message, session)
-
+    except asyncio.IncompleteReadError:
+        pass
     except Exception as e:
         log.error(str(e))
         log.debug(traceback.format_exc())
