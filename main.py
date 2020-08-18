@@ -36,13 +36,8 @@ if args.ldap_auth_only and 'ORAGATE_REDIRECT' not in cfg:
     sys.exit(1)
 
 
-async def clean_exit(signame, loop):
+def clean_exit(signame, loop):
     logging.info(f'got signal {signame}, shutting down')
-    tasks = [task for task in asyncio.Task.all_tasks() if task is not
-             asyncio.tasks.Task.current_task()]
-    list(map(lambda task: task.cancel(), tasks))
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    print('finished awaiting, results: {0}'.format(results))
     loop.stop()
 
 
@@ -51,7 +46,7 @@ async def main():
     # catch some termination signals
     try:
         for signame in ('SIGINT', 'SIGTERM', 'SIGHUP', 'SIGABRT', 'SIGALRM'):
-            loop.add_signal_handler(getattr(signal, signame), functools.partial(asyncio.ensure_future, clean_exit(signame, loop)))
+            loop.add_signal_handler(getattr(signal, signame), functools.partial(clean_exit, signame, loop))
     except NotImplementedError:
         pass
     # client_connected cb passed as partial because we need some data shared, config for example
@@ -59,8 +54,7 @@ async def main():
     logging.info(f'Start serving on {server.sockets[0].getsockname()}')
     async with server:
         await server.serve_forever()
-
-
+    server.close()
 # pid lock check
 check_lock(args.lock_file)
 
