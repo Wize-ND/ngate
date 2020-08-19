@@ -22,6 +22,3 @@ network:
 logging:
   level: DEBUG
   filename: oragate.log
-
-filters:
-  - zlib

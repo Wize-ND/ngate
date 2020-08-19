@@ -1,5 +1,15 @@
 import asyncio
-import logging
+import zlib
+
+
+async def _deflate(data, compress):
+    def nested():
+        deflated = compress.compress(data)
+        deflated += compress.flush(zlib.Z_SYNC_FLUSH)
+        return deflated
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, nested)
 
 
 class EqmUserSession(object):
@@ -44,8 +54,12 @@ class EqmUserSession(object):
         self.updated = None
         self.reader = reader
         self.writer = writer
+        self.ziper = None
 
         self.update(**kwargs)
+
+        if self.required_filters:
+            self.required_filters = self.required_filters.split(',')
 
     def __del__(self):
         if self.db_conn:
@@ -55,14 +69,14 @@ class EqmUserSession(object):
                 self.db_conn.debug(str(e))
 
     def __str__(self):
-        return f'user = {self.user}; application = {self.app}; remote host = {self.local_ip}'
+        return f'user = {self.user}; application = {self.app}; filters = {self.required_filters}; remote host = {self.local_ip}'
 
     async def send_line(self, line: str):
         """
         send a string
         :param line: string to send
         """
-        self.write_line(line)
+        await self.write_line(line)
         await self.writer.drain()
 
     async def send_good_result(self, msg=''):
@@ -71,7 +85,10 @@ class EqmUserSession(object):
         :param msg: message
         """
         msg = ' ' + msg if msg else msg
-        self.writer.write(f'{self._good_result}{self.wrap_line(msg)}'.encode())
+        msg = f'{self._good_result}{self.wrap_line(msg)}'.encode()
+        if self.ziper:
+            msg = await _deflate(msg, self.ziper)
+        self.writer.write(msg)
         await self.writer.drain()
 
     async def send_bad_result(self, msg=''):
@@ -80,7 +97,10 @@ class EqmUserSession(object):
         :param msg: message
         """
         msg = ' ' + msg if msg else msg
-        self.writer.write(f'{self._bad_result}{self.wrap_line(msg)}'.encode())
+        msg = f'{self._bad_result}{self.wrap_line(msg)}'.encode()
+        if self.ziper:
+            msg = await _deflate(msg, self.ziper)
+        self.writer.write(msg)
         await self.writer.drain()
 
     def wrap_line(self, msg: str):
@@ -91,9 +111,21 @@ class EqmUserSession(object):
         """
         return f'{msg}{self.eof}'
 
-    def write_line(self, msg: str):
+    async def write_line(self, msg: str):
         """
         encode and write line with eof at end
         :param msg: message
         """
-        self.writer.write(self.wrap_line(msg).encode())
+        msg = self.wrap_line(msg).encode()
+        if self.ziper:
+            msg = await _deflate(msg, self.ziper)
+        self.writer.write(msg)
+
+    async def write_binary(self, msg: bytes):
+        """
+        encode and write line with eof at end
+        :param msg: message
+        """
+        if self.ziper:
+            msg = await _deflate(msg, self.ziper)
+        self.writer.write(msg)

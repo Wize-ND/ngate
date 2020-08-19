@@ -94,16 +94,16 @@ async def sql_handle(message: str, session: EqmUserSession):
             r = await loop.run_in_executor(None, functools.partial(cur.execute, sql, binds))
             if r:
                 header = '* HEADER ' + ','.join([get_column_type(*col) for col in r.description])
-                session.write_line(header)
+                await session.write_line(header)
                 r.rowfactory = oragate_rowfactory
                 while True:
                     rows = await loop.run_in_executor(None, functools.partial(cur.fetchmany, int(session.packet_size)))
                     if not rows:
                         await session.send_good_result()
                         break
-                    session.write_line(f'* PACKET {len(rows)}')
+                    await session.write_line(f'* PACKET {len(rows)}')
                     for row in rows:
-                        session.write_line(f'* {row}')
+                        await session.write_line(f'* {row}')
                     await session.writer.drain()
             else:
                 await session.send_good_result(str(cur.rowcount))
@@ -161,8 +161,8 @@ async def lob_handle(message: str, session: EqmUserSession):
                             data_size = chunk + 1 + len(data)
                         else:
                             data_size = chunk
-                        session.writer.write(data_size.to_bytes(2, 'little'))
-                        session.writer.write(data)
+                        await session.write_binary(data_size.to_bytes(2, 'little'))
+                        await session.write_binary(data)
                         await session.writer.drain()
                     if len(data) < chunk:
                         break

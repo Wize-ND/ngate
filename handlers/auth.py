@@ -4,6 +4,8 @@ import hashlib
 import logging
 import os
 import uuid
+import zlib
+
 import cx_Oracle
 import ldap
 import shlex
@@ -59,10 +61,14 @@ async def doauth(login_str: str, session: EqmUserSession):
             log.info(f'Access denied : {session}; error message = "{server_answer}"')
 
     if not error:
-        await session.send_good_result(message)
+        if 'zlib' in session.required_filters:
+            await session.write_line('* FILTER zlib')
+            await session.send_good_result(message)
+            session.ziper = zlib.compressobj(zlib.Z_BEST_SPEED, zlib.DEFLATED)
+        else:
+            await session.send_good_result(message)
     else:
         await session.send_bad_result(error)
-
 
 
 def gen_oracle_credentials(ldap_guid: str, key: str) -> tuple:
