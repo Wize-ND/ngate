@@ -66,7 +66,7 @@ try:
 except KeyboardInterrupt:
     logging.info('Program interrupted by user (KeyboardInterrupt)')
 except Exception as e:
-    logging.error(f'Server shutdown due to error: {str(e)}')
+    logging.error(str(e))
     logging.debug(traceback.format_exc())
 finally:
     remove_lock(args.lock_file)
