@@ -3,13 +3,13 @@ import zlib
 
 
 async def _deflate(data, compress):
-    def nested():
+    def deflate():
         deflated = compress.compress(data)
         deflated += compress.flush(zlib.Z_SYNC_FLUSH)
         return deflated
 
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, nested)
+    return await loop.run_in_executor(None, deflate)
 
 
 class EqmUserSession(object):
