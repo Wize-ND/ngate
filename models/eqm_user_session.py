@@ -55,6 +55,7 @@ class EqmUserSession(object):
         self.reader = reader
         self.writer = writer
         self.ziper = None
+        self.cipher = None
 
         self.update(**kwargs)
 
@@ -71,6 +72,13 @@ class EqmUserSession(object):
     def __str__(self):
         return f'user = {self.user}; application = {self.app}; filters = {self.required_filters}; remote host = {self.local_ip}'
 
+    async def apply_filters(self, data: bytes):
+        if self.ziper:
+            data = await _deflate(data, self.ziper)
+        if self.cipher:
+            data = self.cipher.encrypt(data)
+        return data
+
     async def send_line(self, line: str):
         """
         send a string
@@ -86,8 +94,7 @@ class EqmUserSession(object):
         """
         msg = ' ' + msg if msg else msg
         msg = f'{self._good_result}{self.wrap_line(msg)}'.encode()
-        if self.ziper:
-            msg = await _deflate(msg, self.ziper)
+        msg = await self.apply_filters(msg)
         self.writer.write(msg)
         await self.writer.drain()
 
@@ -98,8 +105,7 @@ class EqmUserSession(object):
         """
         msg = ' ' + msg if msg else msg
         msg = f'{self._bad_result}{self.wrap_line(msg)}'.encode()
-        if self.ziper:
-            msg = await _deflate(msg, self.ziper)
+        msg = await self.apply_filters(msg)
         self.writer.write(msg)
         await self.writer.drain()
 
@@ -117,8 +123,7 @@ class EqmUserSession(object):
         :param msg: message
         """
         msg = self.wrap_line(msg).encode()
-        if self.ziper:
-            msg = await _deflate(msg, self.ziper)
+        msg = await self.apply_filters(msg)
         self.writer.write(msg)
 
     async def write_binary(self, msg: bytes):
@@ -126,6 +131,5 @@ class EqmUserSession(object):
         encode and write line with eof at end
         :param msg: message
         """
-        if self.ziper:
-            msg = await _deflate(msg, self.ziper)
+        msg = await self.apply_filters(msg)
         self.writer.write(msg)

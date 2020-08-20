@@ -2,14 +2,15 @@ import asyncio
 import logging
 import traceback
 
-from handlers import auth, sql
+from handlers import auth, sql, encryption
 from models.eqm_user_session import EqmUserSession
 
 # handler funcs
 handlers = [{'prefix': 'LOGIN', 'function': auth.doauth},
             {'prefix': 'SQL', 'function': sql.sql_handle},
             {'prefix': 'SELECT_LOB', 'function': sql.lob_handle},
-            {'prefix': 'UPDATE_LOB', 'function': sql.lob_handle}]
+            {'prefix': 'UPDATE_LOB', 'function': sql.lob_handle},
+            {'prefix': 'ENCRYPTED', 'function': encryption}]
 
 
 async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio.streams.StreamWriter, cfg: dict):
@@ -28,6 +29,7 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
                 # client disconnected
                 log.debug(f"disconnected")
                 break
+            # TODO decrypt message if encyrypted
             message = data.decode()
             # function logic
             for handler in handlers:
