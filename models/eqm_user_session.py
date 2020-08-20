@@ -1,5 +1,6 @@
 import asyncio
 import zlib
+from Crypto.Cipher import AES
 
 
 async def _deflate(data, compress):
@@ -55,7 +56,7 @@ class EqmUserSession(object):
         self.reader = reader
         self.writer = writer
         self.ziper = None
-        self.cipher = None
+        self.encryption_key = None
 
         self.update(**kwargs)
 
@@ -72,11 +73,27 @@ class EqmUserSession(object):
     def __str__(self):
         return f'user = {self.user}; application = {self.app}; filters = {self.required_filters}; remote host = {self.local_ip}'
 
+    def decrypt_data(self, data: bytes):
+        return AES.new(self.encryption_key[0], AES.MODE_CTR, nonce=self.encryption_key[1]).decrypt(data)
+
+    def encrypt_data(self, data: bytes):
+        return AES.new(self.encryption_key[0], AES.MODE_CTR, nonce=self.encryption_key[1]).encrypt(data)
+
     async def apply_filters(self, data: bytes):
         if self.ziper:
             data = await _deflate(data, self.ziper)
-        if self.cipher:
-            data = self.cipher.encrypt(data)
+        if self.encryption_key:
+            data = self.encrypt_data(data)
+        return data
+
+    async def read_data(self, n: int):
+        """
+        Read up to `n` bytes from the stream, decrypting if enabled
+        :param n: num bytes to read
+        """
+        data = await self.reader.read(n)
+        if self.encryption_key:
+            data = AES.new(self.encryption_key, AES.MODE_CTR).decrypt(data)
         return data
 
     async def send_line(self, line: str):

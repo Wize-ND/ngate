@@ -10,7 +10,7 @@ handlers = [{'prefix': 'LOGIN', 'function': auth.doauth},
             {'prefix': 'SQL', 'function': sql.sql_handle},
             {'prefix': 'SELECT_LOB', 'function': sql.lob_handle},
             {'prefix': 'UPDATE_LOB', 'function': sql.lob_handle},
-            {'prefix': 'ENCRYPTED', 'function': encryption}]
+            {'prefix': 'ENCRYPTED', 'function': encryption.start_encryption}]
 
 
 async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio.streams.StreamWriter, cfg: dict):
@@ -24,12 +24,13 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
     try:
         while True:
             # reading all incoming data
-            data = await reader.readuntil(session.eof.encode())
+            data = await reader.read(1024 * 1024)
             if not data:
                 # client disconnected
                 log.debug(f"disconnected")
                 break
-            # TODO decrypt message if encyrypted
+            if session.encryption_key:
+                data = session.decrypt_data(data)
             message = data.decode()
             # function logic
             for handler in handlers:

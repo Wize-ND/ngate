@@ -140,7 +140,7 @@ async def lob_handle(message: str, session: EqmUserSession):
                 offset = 1
                 lob.open()
                 while offset < lob_size:
-                    data = await session.reader.read(chunk)
+                    data = await session.read_data(chunk)
                     if data:
                         await loop.run_in_executor(None, functools.partial(lob.write, data, offset))
                     offset += len(data)
