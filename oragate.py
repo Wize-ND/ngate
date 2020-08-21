@@ -24,7 +24,7 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
     try:
         while True:
             # reading all incoming data
-            data = await reader.read(1024 * 1024)
+            data = await reader.readuntil(session.eof.encode())
             if not data:
                 # client disconnected
                 log.debug(f"disconnected")
