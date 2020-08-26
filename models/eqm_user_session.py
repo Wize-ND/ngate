@@ -1,6 +1,6 @@
 import asyncio
 import zlib
-from Crypto.Cipher import AES
+from Cryptodome.Cipher import AES
 
 
 async def _deflate(data, compress):

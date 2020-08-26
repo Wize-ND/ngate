@@ -1,5 +1,5 @@
 from models.eqm_user_session import EqmUserSession
-from Crypto.Random import get_random_bytes
+from Cryptodome.Random import get_random_bytes
 
 
 async def start_encryption(message, session: EqmUserSession):
