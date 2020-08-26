@@ -1,0 +1,5 @@
+PyYAML>=5.3.1
+psutil>=5.7.2
+cx_Oracle
+python-ldap
+pycryptodome
