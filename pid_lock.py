@@ -1,4 +1,3 @@
-import logging
 import os
 import sys
 import psutil
@@ -15,13 +14,13 @@ def check_lock(filename):
             lock_pid = int(lock_file.read())
             is_running = psutil.pid_exists(lock_pid)
         if is_running:
-            logging.warning('Lock-file exists and process is running')
+            print('Lock-file exists and process is running')
             sys.exit(0)
     try:
         with open(filename, 'w') as lock_file:
             lock_file.write(str(os.getpid()))
     except Exception as e:
-        logging.error(f'Could not create lock-file: {str(e)}')
+        print(f'Could not create lock-file: {str(e)}')
         sys.exit(1)
 
 
