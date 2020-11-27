@@ -108,9 +108,9 @@ async def auth_oracle(user, password, session: EqmUserSession):
         cur = conn.cursor()
         try:
             r = cur.execute('SELECT session_id FROM user_sessions WHERE session_id = (SELECT get_session_id FROM dual)')
-            if r:
+            try:
                 session.session_id = r.fetchall()[0][0]
-            else:
+            except:
                 return True, conn
 
             r = cur.execute("""select p.personal_id,
