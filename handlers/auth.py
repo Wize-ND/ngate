@@ -87,7 +87,7 @@ def auth_ldap(login: str, password: str, server: dict):
     user_found = None
     for asnwer in answers:
         if asnwer[0] is not None:
-            user_found, user_dn, objectGUID = True, asnwer[0], uuid.UUID(bytes_le=asnwer[0][1]['objectGUID'][0]).hex.upper()
+            user_found, user_dn, objectGUID = True, asnwer[0], uuid.UUID(bytes_le=asnwer[1]['objectGUID'][0]).hex.upper()
             break
 
     if user_found:
