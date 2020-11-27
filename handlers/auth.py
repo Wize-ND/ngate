@@ -79,30 +79,26 @@ def gen_oracle_credentials(ldap_guid: str, key: str) -> tuple:
 
 
 def auth_ldap(login: str, password: str, server: dict):
-    log = logging.getLogger('auth_ldap')
     ldap_filter = server['filter_users'].format(login)
     connect = ldap.initialize(f'ldap://{server["host"]}')
     connect.set_option(ldap.OPT_REFERRALS, 0)
     connect.simple_bind_s(server['bind_dn'], server['password'])
-    hits = connect.search_s(server['base_user_dn'], ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'])
-
-    hit = None
-    for i in hits:
-        if 'objectGUID' in i[1]:
-            hit = i[1]['objectGUID'][0]
+    answers = connect.search_s(server['base_user_dn'], ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'])
+    user_found = None
+    for asnwer in answers:
+        if asnwer[0] is not None:
+            user_found, user_dn, objectGUID = True, asnwer[0], uuid.UUID(bytes_le=asnwer[0][1]['objectGUID'][0]).hex.upper()
             break
 
-    if hit:
-        user_dn = hit
-        objectGUID = uuid.UUID(bytes_le=hit).hex.upper()
+    if user_found:
+        try:
+            connect.simple_bind_s(user_dn, password)
+            connect.unbind()
+            return True, objectGUID
+        except Exception as e:
+            return False, str(e)
     else:
         return False, f'person ({login}) not found'
-    try:
-        connect.simple_bind_s(user_dn, password)
-        connect.unbind()
-    except Exception as e:
-        return False, str(e)
-    return True, objectGUID
 
 
 async def auth_oracle(user: str, password, session: EqmUserSession):
