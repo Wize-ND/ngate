@@ -97,7 +97,7 @@ def auth_ldap(login: str, password: str, server: dict):
     return True, objectGUID
 
 
-async def auth_oracle(user, password, session: EqmUserSession):
+async def auth_oracle(user: str, password, session: EqmUserSession):
     loop = asyncio.get_event_loop()
     try:
         conn = await loop.run_in_executor(None, functools.partial(cx_Oracle.connect, user=user,
@@ -106,11 +106,13 @@ async def auth_oracle(user, password, session: EqmUserSession):
                                                                   encoding='UTF-8',
                                                                   dsn=session.oragate_cfg['oracle']['dsn']))
         cur = conn.cursor()
+        if user.lower() == 'em':
+            return True, conn
         try:
             r = cur.execute('SELECT session_id FROM user_sessions WHERE session_id = (SELECT get_session_id FROM dual)')
-            try:
+            if r:
                 session.session_id = r.fetchall()[0][0]
-            except:
+            else:
                 return True, conn
 
             r = cur.execute("""select p.personal_id,
