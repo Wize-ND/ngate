@@ -87,7 +87,7 @@ def auth_ldap(login: str, password: str, server: dict):
     connect.set_option(ldap.OPT_REFERRALS, 0)
     connect.simple_bind_s(server['bind_dn'], server['password'])
 
-    page_control = SimplePagedResultsControl(True, size=1000, cookie='')
+    page_control = SimplePagedResultsControl(True, size=100, cookie='')
     response = connect.search_ext(server['base_user_dn'], ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'], serverctrls=[page_control])
     hit = []
     pages = 0
