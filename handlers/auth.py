@@ -9,9 +9,6 @@ import zlib
 import cx_Oracle
 import ldap
 import shlex
-
-from ldap.controls import SimplePagedResultsControl
-
 from models.eqm_user_session import EqmUserSession
 from db import default_output
 
@@ -86,25 +83,7 @@ def auth_ldap(login: str, password: str, server: dict):
     connect = ldap.initialize(f'ldap://{server["host"]}')
     connect.set_option(ldap.OPT_REFERRALS, 0)
     connect.simple_bind_s(server['bind_dn'], server['password'])
-
-    page_control = SimplePagedResultsControl(True, size=100, cookie='')
-    response = connect.search_ext(server['base_user_dn'], ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'], serverctrls=[page_control])
-    hit = []
-    pages = 0
-    while True:
-        pages += 1
-        rtype, rdata, rmsgid, serverctrls = connect.result3(response)
-        hit.extend(rdata)
-        controls = [control for control in serverctrls
-                    if control.controlType == SimplePagedResultsControl.controlType]
-        if not controls:
-            hit = connect.search_s(server['base_user_dn'], ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'])
-            break
-        if not controls[0].cookie:
-            break
-        page_control.cookie = controls[0].cookie
-        response = connect.search_ext(server['base_user_dn'], ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'], serverctrls=[page_control])
-
+    hit = connect.search_s(server['base_user_dn'], ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'])
     if hit:
         user_dn = hit[0][0]
         objectGUID = uuid.UUID(bytes_le=hit[0][1]['objectGUID'][0]).hex.upper()
@@ -118,7 +97,7 @@ def auth_ldap(login: str, password: str, server: dict):
     return True, objectGUID
 
 
-async def auth_oracle(user: str, password, session: EqmUserSession):
+async def auth_oracle(user, password, session: EqmUserSession):
     loop = asyncio.get_event_loop()
     try:
         conn = await loop.run_in_executor(None, functools.partial(cx_Oracle.connect, user=user,
@@ -127,8 +106,6 @@ async def auth_oracle(user: str, password, session: EqmUserSession):
                                                                   encoding='UTF-8',
                                                                   dsn=session.oragate_cfg['oracle']['dsn']))
         cur = conn.cursor()
-        if user.upper() == 'EM':
-            return True, conn
         try:
             r = cur.execute('SELECT session_id FROM user_sessions WHERE session_id = (SELECT get_session_id FROM dual)')
             if r:
