@@ -79,11 +79,13 @@ def gen_oracle_credentials(ldap_guid: str, key: str) -> tuple:
 
 
 def auth_ldap(login: str, password: str, server: dict):
+    log = logging.getLogger('auth_ldap')
     ldap_filter = server['filter_users'].format(login)
     connect = ldap.initialize(f'ldap://{server["host"]}')
     connect.set_option(ldap.OPT_REFERRALS, 0)
     connect.simple_bind_s(server['bind_dn'], server['password'])
     hit = connect.search_s(server['base_user_dn'], ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'])
+    log.debug(hit)
     if hit:
         user_dn = hit[0][0]
         objectGUID = uuid.UUID(bytes_le=hit[0][1]['objectGUID'][0]).hex.upper()
