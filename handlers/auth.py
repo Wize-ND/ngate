@@ -3,6 +3,7 @@ import functools
 import hashlib
 import logging
 import os
+import re
 import uuid
 import zlib
 
@@ -25,8 +26,8 @@ async def doauth(login_str: str, session: EqmUserSession):
     message = ''
     error = None
 
-    # cut 'LOGIN' from login_str, and turn it to dict from space separated key=value string
-    login_dict = dict(kv.split('=') for kv in shlex.split(login_str[5:]))
+    login_dict = {i.group('key'): i.group('value') for i in
+                  re.finditer(r'(?P<key>\w+)="(?P<value>.*?)"', login_str, re.MULTILINE)}
     session.update(**login_dict)
 
     if 'ldap' in session.oragate_cfg:
