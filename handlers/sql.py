@@ -106,6 +106,7 @@ async def sql_handle(message: str, session: EqmUserSession):
                         await session.write_line(f'* {row}')
                     await session.writer.drain()
             else:
+                await session.write_line(f'* {str(cur.rowcount)}')
                 await session.send_good_result()
     except Exception as e:
         log.error(str(e))
