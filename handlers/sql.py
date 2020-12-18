@@ -21,8 +21,8 @@ def special_encode(input_str):
 def special_decode(input_str):
     for c in special_chars:
         input_str = input_str.replace(special_chars[c], c)
-    input_str = input_str.replace('\\,', ',')
-    return input_str.replace('\\\\', '\\')
+    input_str = input_str.replace('\\\\', '\\')
+    return input_str.replace('\\,', ',')
 
 
 datatypes = {cx_Oracle.DB_TYPE_BINARY_DOUBLE: 'N',
@@ -106,7 +106,7 @@ async def sql_handle(message: str, session: EqmUserSession):
                         await session.write_line(f'* {row}')
                     await session.writer.drain()
             else:
-                await session.send_good_result(str(cur.rowcount))
+                await session.send_good_result()
     except Exception as e:
         log.error(str(e))
         log.debug(traceback.format_exc())

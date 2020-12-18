@@ -39,6 +39,8 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
                     await handler['function'](message, session)
     except (asyncio.IncompleteReadError, asyncio.CancelledError):
         pass
+    except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as e:
+        log.info(f"disconnected {str(e)}")
     except Exception as e:
         log.error(str(e))
         log.debug(traceback.format_exc())
