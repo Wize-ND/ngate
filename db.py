@@ -70,7 +70,7 @@ class OracleConnect(object):
         cur = self.conn.cursor()
         try:
             r = cur.execute(query, params)
-            self.conn.commit()
+            # self.conn.commit() 
             if r:
                 result = default_output(cur)
             else:
