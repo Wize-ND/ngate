@@ -14,7 +14,7 @@ def special_encode(input_str):
     input_str = input_str.replace('\\', '\\\\').replace('\\', '\\\\')
     for c in special_chars:
         input_str = input_str.replace(c, special_chars[c])
-    input_str = input_str.replace(',', '\\,')
+    input_str = input_str.replace(',', '\\\\,')
     return input_str
 
 
