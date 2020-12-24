@@ -67,7 +67,7 @@ def oragate_rowfactory(*values):
 
 def format_bind_value(str: str):
     str = special_decode(str)
-    if str == 'null':
+    if str.lower() == 'null':
         return None
     if re.match(r'\d{8}_\d{6}', str):
         return datetime.datetime.strptime(str, '%Y%m%d_%H%M%S')
