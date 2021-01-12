@@ -9,7 +9,7 @@ import zlib
 
 import cx_Oracle
 import ldap
-import shlex
+
 from models.eqm_user_session import EqmUserSession
 from db import default_output
 
@@ -55,7 +55,8 @@ async def doauth(login_str: str, session: EqmUserSession):
     else:
         ora_success, server_answer = await auth_oracle(session.user, session.password, session)
         if ora_success:
-            log.info(f'Successful local login : {session}')
+            if not session.user.lower() == 'em':
+                log.info(f'Successful local login : {session}')
             session.db_conn = server_answer
         else:
             error = server_answer
