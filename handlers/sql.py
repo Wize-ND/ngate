@@ -109,9 +109,13 @@ async def sql_handle(message: str, session: EqmUserSession):
                 await session.write_line(f'* {str(cur.rowcount)}')
                 await session.send_good_result()
     except Exception as e:
-        log.error(str(e))
+        err = str(e)
+        log.error(err)
         log.debug(traceback.format_exc())
-        await session.send_bad_result(str(e))
+        # new line char cause EM to faults
+        for c in special_chars:
+            err = err.replace(c, special_chars[c])
+        await session.send_bad_result(err)
 
 
 async def lob_handle(message: str, session: EqmUserSession):
