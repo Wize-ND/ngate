@@ -108,14 +108,18 @@ async def sql_handle(message: str, session: EqmUserSession):
             else:
                 await session.write_line(f'* {str(cur.rowcount)}')
                 await session.send_good_result()
-    except Exception as e:
+
+    except cx_Oracle.DatabaseError as e:
         err = str(e)
-        log.error(err)
-        log.debug(traceback.format_exc())
+        log.debug(err)
         # new line char cause EM to faults
         for c in special_chars:
             err = err.replace(c, special_chars[c])
         await session.send_bad_result(err)
+
+    except Exception:
+        log.error(traceback.format_exc())
+        await session.send_bad_result('internal error')
 
 
 async def lob_handle(message: str, session: EqmUserSession):
@@ -155,26 +159,36 @@ async def lob_handle(message: str, session: EqmUserSession):
             log.debug(sql)
             with session.db_conn.cursor() as cur:
                 await loop.run_in_executor(None, functools.partial(cur.execute, sql))
-                lob, = await loop.run_in_executor(None, cur.fetchone)
-                offset = 1
-                chunk = 32767
-                await session.send_line('* READY')
-                while True:
-                    data = lob.read(offset, chunk)
-                    if data:
+                result = await loop.run_in_executor(None, cur.fetchone)
+                if result:
+                    lob, = result
+                    offset = 1
+                    chunk = 32767
+                    await session.send_line('* READY')
+                    while True:
+                        data = lob.read(offset, chunk)
+                        if data:
+                            if len(data) < chunk:
+                                data_size = chunk + 1 + len(data)
+                            else:
+                                data_size = chunk
+                            await session.write_binary(data_size.to_bytes(2, 'little'))
+                            await session.write_binary(data)
+                            await session.writer.drain()
                         if len(data) < chunk:
-                            data_size = chunk + 1 + len(data)
-                        else:
-                            data_size = chunk
-                        await session.write_binary(data_size.to_bytes(2, 'little'))
-                        await session.write_binary(data)
-                        await session.writer.drain()
-                    if len(data) < chunk:
-                        break
-                    offset += len(data)
+                            break
+                        offset += len(data)
 
         await session.send_good_result()
-    except Exception as e:
-        log.error(str(e))
-        log.debug(traceback.format_exc())
-        await session.send_bad_result(str(e))
+
+    except cx_Oracle.DatabaseError as e:
+        err = str(e)
+        log.debug(err)
+        # new line char cause EM to faults
+        for c in special_chars:
+            err = err.replace(c, special_chars[c])
+        await session.send_bad_result(err)
+
+    except Exception:
+        log.error(traceback.format_exc())
+        await session.send_bad_result('internal error')
