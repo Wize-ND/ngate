@@ -27,7 +27,7 @@ async def doauth(login_str: str, session: EqmUserSession):
     error = None
 
     login_dict = {i.group('key'): i.group('value') for i in
-                  re.finditer(r'(?P<key>\w+)="(?P<value>.*?)"', login_str, re.MULTILINE)}
+                  re.finditer(r'(?P<key>\w+)="(?P<value>.*?)"\s', login_str, re.MULTILINE)}
     session.update(**login_dict)
 
     if 'ldap' in session.oragate_cfg:
