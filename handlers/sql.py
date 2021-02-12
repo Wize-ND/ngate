@@ -91,6 +91,8 @@ async def sql_handle(message: str, session: EqmUserSession):
     log.debug(f'sql, binds = {sql, binds}')
     try:
         with session.db_conn.cursor() as cur:
+            cur.prefetchrows = 1000
+            cur.arraysize = 1000
             r = await loop.run_in_executor(None, functools.partial(cur.execute, sql, binds))
             if r:
                 header = '* HEADER ' + ','.join([get_column_type(*col) for col in r.description])
