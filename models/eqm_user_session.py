@@ -57,6 +57,8 @@ class EqmUserSession(object):
         self.writer = writer
         self.ziper = None
         self.encryption_key = None
+        # buffer size for sending packets in SQL
+        self.buffer_size = 2 ** 17  # 128 KB
 
         self.update(**kwargs)
 
@@ -150,3 +152,23 @@ class EqmUserSession(object):
         """
         msg = await self.apply_filters(msg)
         self.writer.write(msg)
+
+    async def buffered_write(self, buffer: bytes, data: str):
+        """
+
+        :param buffer: write buffer
+        :param data: data to send
+        :return: appended buffer or remaining data
+        """
+        data = self.wrap_line(data).encode()
+        chunk = len(buffer) + len(data)
+        if chunk >= self.buffer_size:
+            await self.write_binary(buffer)
+            await self.writer.drain()
+            return data
+        else:
+            return buffer + data
+
+    @property
+    def good_result(self):
+        return self._good_result

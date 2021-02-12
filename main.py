@@ -4,7 +4,6 @@ import functools
 import logging
 import signal
 import sys
-import socket
 
 from pid_lock import check_lock, remove_lock
 import traceback
@@ -52,9 +51,7 @@ async def main():
         pass
     # client_connected cb passed as partial because we need some data shared, config for example
     server = await asyncio.start_server(functools.partial(client_connected, cfg=cfg), port=cfg['network']['port'])
-    for s in server.sockets:
-        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 0)
-    logging.info(f'Start serving on {server.sockets[0].getsockname()}')
+    logging.info(f'Start serving on {", ".join([s.getsockname()[0] + ":" + str(s.getsockname()[1]) for s in server.sockets])}')
     async with server:
         try:
             await server.serve_forever()

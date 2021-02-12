@@ -91,21 +91,24 @@ async def sql_handle(message: str, session: EqmUserSession):
     log.debug(f'sql, binds = {sql, binds}')
     try:
         with session.db_conn.cursor() as cur:
-            cur.prefetchrows = 1000
-            cur.arraysize = 1000
+            cur.prefetchrows = 5000
+            cur.arraysize = 5000
             r = await loop.run_in_executor(None, functools.partial(cur.execute, sql, binds))
             if r:
                 header = '* HEADER ' + ','.join([get_column_type(*col) for col in r.description])
                 await session.write_line(header)
                 r.rowfactory = oragate_rowfactory
+                buffer = bytes()
                 while True:
                     rows = await loop.run_in_executor(None, functools.partial(cur.fetchmany, int(session.packet_size)))
                     if not rows:
-                        await session.send_good_result()
+                        buffer += session.wrap_line(session.good_result).encode()
                         break
-                    await session.write_line(f'* PACKET {len(rows)}')
+                    buffer = await session.buffered_write(buffer, f'* PACKET {len(rows)}')
                     for row in rows:
-                        await session.write_line(f'* {row}')
+                        buffer = await session.buffered_write(buffer, f'* {row}')
+                if buffer:
+                    await session.write_binary(buffer)
                     await session.writer.drain()
             else:
                 await session.write_line(f'* {str(cur.rowcount)}')
