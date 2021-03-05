@@ -181,11 +181,11 @@ async def lob_handle(message: str, session: EqmUserSession):
                                 data_size = chunk
                             await session.write_binary(data_size.to_bytes(2, 'little'))
                             await session.write_binary(data)
-                            del data
                             await session.writer.drain()
                         if len(data) < chunk:
                             del data
                             break
+                        del data
                         offset += len(data)
 
         await session.send_good_result()
