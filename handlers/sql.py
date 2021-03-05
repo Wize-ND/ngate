@@ -110,6 +110,7 @@ async def sql_handle(message: str, session: EqmUserSession):
                 if buffer:
                     await session.write_binary(buffer)
                     await session.writer.drain()
+                del buffer
             else:
                 await session.write_line(f'* {str(cur.rowcount)}')
                 await session.send_good_result()

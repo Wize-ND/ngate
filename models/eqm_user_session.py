@@ -164,6 +164,7 @@ class EqmUserSession(object):
         chunk = len(buffer) + len(data)
         if chunk >= self.buffer_size:
             await self.write_binary(buffer)
+            del buffer
             await self.writer.drain()
             return data
         else:
