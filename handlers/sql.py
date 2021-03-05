@@ -173,7 +173,7 @@ async def lob_handle(message: str, session: EqmUserSession):
                     chunk = 32767
                     await session.send_line('* READY')
                     while True:
-                        data = await loop.run_in_executor(None, lob.read(offset, chunk))
+                        data = await loop.run_in_executor(None, functools.partial(lob.read, offset, chunk))
                         if data:
                             if len(data) < chunk:
                                 data_size = chunk + 1 + len(data)
@@ -181,6 +181,7 @@ async def lob_handle(message: str, session: EqmUserSession):
                                 data_size = chunk
                             await session.write_binary(data_size.to_bytes(2, 'little'))
                             await session.write_binary(data)
+                            del data
                             await session.writer.drain()
                         if len(data) < chunk:
                             del data
