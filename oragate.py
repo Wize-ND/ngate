@@ -37,6 +37,7 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
             for handler in handlers:
                 if message.startswith(handler['prefix']):
                     await handler['function'](message, session)
+            del message, data
     except (asyncio.IncompleteReadError, asyncio.CancelledError):
         pass
     except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as e:

@@ -159,6 +159,7 @@ async def lob_handle(message: str, session: EqmUserSession):
                     if data:
                         await loop.run_in_executor(None, functools.partial(lob.write, data, offset))
                     offset += len(data)
+                del data
                 lob.close()
         elif command == 'SELECT_LOB':
             sql = f'SELECT {field} from {table} where {where}'
@@ -172,7 +173,7 @@ async def lob_handle(message: str, session: EqmUserSession):
                     chunk = 32767
                     await session.send_line('* READY')
                     while True:
-                        data = lob.read(offset, chunk)
+                        data = await loop.run_in_executor(None, lob.read(offset, chunk))
                         if data:
                             if len(data) < chunk:
                                 data_size = chunk + 1 + len(data)
@@ -182,6 +183,7 @@ async def lob_handle(message: str, session: EqmUserSession):
                             await session.write_binary(data)
                             await session.writer.drain()
                         if len(data) < chunk:
+                            del data
                             break
                         offset += len(data)
 
