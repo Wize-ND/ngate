@@ -9,6 +9,8 @@ oracle:
 network:
   port: 4200
 
+z_memLevel: 8
+
 logging:
   level: DEBUG
   filename: oragate.log

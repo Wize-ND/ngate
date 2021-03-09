@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import traceback
-
 from handlers import auth, sql, encryption
 from models.eqm_user_session import EqmUserSession
 
@@ -25,15 +24,14 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
         while True:
             # reading all incoming data
             data = await reader.readuntil(session.eof.encode())
-            log.debug(f"{data.decode()}")
             if not data:
                 # client disconnected
-                del session
                 log.debug(f"disconnected")
                 break
             if session.encryption_key:
                 data = session.decrypt_data(data)
             message = data.decode()
+            log.debug(f"{message}")
             # function logic
             for handler in handlers:
                 if message.startswith(handler['prefix']):
@@ -42,10 +40,11 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
     except (asyncio.IncompleteReadError, asyncio.CancelledError):
         pass
     except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as e:
-        log.info(f"disconnected {str(e)}")
+        log.error(f"disconnected {str(e)}")
     except Exception as e:
         log.error(str(e))
         log.debug(traceback.format_exc())
         await session.send_bad_result(str(e))
     finally:
+        del session
         writer.close()

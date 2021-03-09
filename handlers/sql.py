@@ -159,7 +159,6 @@ async def lob_handle(message: str, session: EqmUserSession):
                     if data:
                         await loop.run_in_executor(None, functools.partial(lob.write, data, offset))
                     offset += len(data)
-                del data
                 lob.close()
         elif command == 'SELECT_LOB':
             sql = f'SELECT {field} from {table} where {where}'
@@ -183,9 +182,7 @@ async def lob_handle(message: str, session: EqmUserSession):
                             await session.write_binary(data)
                             await session.writer.drain()
                         if len(data) < chunk:
-                            del data
                             break
-                        del data
                         offset += len(data)
 
         await session.send_good_result()
@@ -201,3 +198,7 @@ async def lob_handle(message: str, session: EqmUserSession):
     except Exception:
         log.error(traceback.format_exc())
         await session.send_bad_result('internal error')
+
+    finally:
+        if data:
+            del data
