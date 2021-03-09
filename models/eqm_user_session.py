@@ -153,7 +153,7 @@ class EqmUserSession(object):
         msg = await self.apply_filters(msg)
         self.writer.write(msg)
 
-    async def buffered_write(self, buffer: bytes, data: str):
+    async def buffered_write(self, buffer: bytearray, data: str):
         """
 
         :param buffer: write buffer
@@ -168,7 +168,8 @@ class EqmUserSession(object):
             await self.writer.drain()
             return data
         else:
-            return buffer + data
+            buffer += data
+            return buffer
 
     @property
     def good_result(self):

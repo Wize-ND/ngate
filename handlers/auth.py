@@ -66,7 +66,7 @@ async def doauth(login_str: str, session: EqmUserSession):
         if 'zlib' in session.required_filters:
             await session.write_line('* FILTER zlib')
             await session.send_good_result(message)
-            session.ziper = zlib.compressobj(zlib.Z_BEST_SPEED, zlib.DEFLATED, zlib.MAX_WBITS, memLevel=9)
+            session.ziper = zlib.compressobj(zlib.Z_BEST_SPEED, zlib.DEFLATED, zlib.MAX_WBITS, memLevel=1)
         else:
             await session.send_good_result(message)
     else:

@@ -28,6 +28,7 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
             log.debug(f"{data.decode()}")
             if not data:
                 # client disconnected
+                del session
                 log.debug(f"disconnected")
                 break
             if session.encryption_key:

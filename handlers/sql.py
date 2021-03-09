@@ -98,7 +98,7 @@ async def sql_handle(message: str, session: EqmUserSession):
                 header = '* HEADER ' + ','.join([get_column_type(*col) for col in r.description])
                 await session.write_line(header)
                 r.rowfactory = oragate_rowfactory
-                buffer = bytes()
+                buffer = bytearray()
                 while True:
                     rows = await loop.run_in_executor(None, functools.partial(cur.fetchmany, int(session.packet_size)))
                     if not rows:
