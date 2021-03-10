@@ -59,18 +59,12 @@ class EqmUserSession(object):
         self.encryption_key = None
         # buffer size for sending packets in SQL
         self.buffer_size = 2 ** 17  # 128 KB
+        self.max_life = 36000  # in seconds (36000 = 10 hours)
 
         self.update(**kwargs)
 
         if self.required_filters:
             self.required_filters = self.required_filters.split(',')
-
-    def __del__(self):
-        if self.db_conn:
-            try:
-                self.db_conn.close()
-            except Exception as e:
-                self.db_conn.debug(str(e))
 
     def __str__(self):
         return f'user = {self.user}; application = {self.app}; filters = {self.required_filters}; remote host = {self.local_ip}'
@@ -152,24 +146,6 @@ class EqmUserSession(object):
         """
         msg = await self.apply_filters(msg)
         self.writer.write(msg)
-
-    async def buffered_write(self, buffer: bytearray, data: str):
-        """
-
-        :param buffer: write buffer
-        :param data: data to send
-        :return: appended buffer or remaining data
-        """
-        data = self.wrap_line(data).encode()
-        chunk = len(buffer) + len(data)
-        if chunk >= self.buffer_size:
-            await self.write_binary(buffer)
-            del buffer
-            await self.writer.drain()
-            return data
-        else:
-            buffer += data
-            return buffer
 
     @property
     def good_result(self):

@@ -1,4 +1,3 @@
-import datetime
 import logging
 import cx_Oracle
 
@@ -22,17 +21,11 @@ def default_output(cur: cx_Oracle.Cursor):
     :param cur: cx_Oracle.Cursor
     :return: list of dicts or {} if cursor is empty
     """
-    rows = [x for x in cur.fetchall()]
-    cols = [x[0] for x in cur.description]
-    if rows:
-        result = [
-            dict(zip([col.lower() for col in cols],
-                     (value if not isinstance(value, (datetime.datetime, cx_Oracle.LOB)) else str(value) for value in row)))
-            for row in rows]
-        if len(rows) == 1:
-            result = result[0]
-    else:
-        result = {}
+    columns = [col[0].lower() for col in cur.description]
+    cur.rowfactory = lambda *args: dict(zip(columns, args))
+    result = [row for row in cur.fetchall()] if cur else {}
+    if len(result) == 1:
+        result = result[0]
     return result
 
 
@@ -67,41 +60,10 @@ class OracleConnect(object):
             params = kwargs['params']
         else:
             params = {}
-        cur = self.conn.cursor()
-        try:
+        with self.conn.cursor() as cur:
             r = cur.execute(query, params)
-            # self.conn.commit() 
             if r:
                 result = default_output(cur)
             else:
                 result = {}
-        finally:
-            cur.close()
-        return result
-
-    def select_all_from_table(self, table):
-        query = f'select * from {table}'
-        cursor = self.conn.cursor()
-        try:
-            r = cursor.execute(query)
-            if r:
-                result = default_output(cursor)
-            else:
-                result = {}
-        finally:
-            cursor.close()
-        return result
-
-    def get_table_cols(self, owner: str, table: str):
-        query = 'select t.column_name, t.data_type from all_tab_columns t where' \
-                f" lower(t.owner) = '{owner.lower()}' and lower(t.table_name) = '{table.lower()}'"
-        cursor = self.conn.cursor()
-        try:
-            r = cursor.execute(query)
-            if r:
-                result = default_output(cursor)
-            else:
-                result = {}
-        finally:
-            cursor.close()
         return result

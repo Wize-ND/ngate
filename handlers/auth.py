@@ -112,10 +112,9 @@ async def auth_oracle(user: str, password, session: EqmUserSession):
                                                                   threaded=True,
                                                                   encoding='UTF-8',
                                                                   dsn=session.oragate_cfg['oracle']['dsn']))
-        cur = conn.cursor()
         if user.lower() == 'em':
             return True, conn
-        try:
+        with conn.cursor() as cur:
             r = cur.execute('SELECT session_id FROM user_sessions WHERE session_id = (SELECT get_session_id FROM dual)')
             if r:
                 session.session_id = r.fetchall()[0][0]
@@ -154,8 +153,6 @@ async def auth_oracle(user: str, password, session: EqmUserSession):
                          'session_id': session.session_id})
             conn.commit()
             session.updated = True
-        finally:
-            cur.close()
 
     except Exception as e:
         return False, str(e)

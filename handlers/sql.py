@@ -3,7 +3,6 @@ import datetime
 import functools
 import logging
 import re
-import traceback
 import cx_Oracle
 from models.eqm_user_session import EqmUserSession
 
@@ -78,7 +77,6 @@ def format_bind_value(str: str):
     else:
         return str
 
-
 async def sql_handle(message: str, session: EqmUserSession):
     loop = asyncio.get_event_loop()
     log = logging.getLogger('sql_handle')
@@ -88,7 +86,6 @@ async def sql_handle(message: str, session: EqmUserSession):
     sql = sql.replace('\\\\', '\\').replace('\\\\', '\\')
     raw_binds = re.split(r'(?<!\\),', binds_str)
     binds = dict(zip([key[1::] for key in raw_binds[::2]], [format_bind_value(value) for value in raw_binds[1::2]]))
-    log.debug(f'sql, binds = {sql, binds}')
     try:
         with session.db_conn.cursor() as cur:
             cur.prefetchrows = 5000
@@ -104,9 +101,14 @@ async def sql_handle(message: str, session: EqmUserSession):
                     if not rows:
                         buffer += session.wrap_line(session.good_result).encode()
                         break
-                    buffer = await session.buffered_write(buffer, f'* PACKET {len(rows)}')
+                    buffer += session.wrap_line(f'* PACKET {len(rows)}').encode()
                     for row in rows:
-                        buffer = await session.buffered_write(buffer, f'* {row}')
+                        if len(buffer) + len(row) >= session.buffer_size:
+                            await session.write_binary(buffer)
+                            await session.writer.drain()
+                            buffer = session.wrap_line(f'* {row}').encode()
+                        else:
+                            buffer += session.wrap_line(f'* {row}').encode()
                 if buffer:
                     await session.write_binary(buffer)
                     await session.writer.drain()
@@ -123,10 +125,9 @@ async def sql_handle(message: str, session: EqmUserSession):
             err = err.replace(c, special_chars[c])
         await session.send_bad_result(err)
 
-    except Exception:
-        log.error(traceback.format_exc())
+    except Exception as e:
+        log.error(e)
         await session.send_bad_result('internal error')
-
 
 async def lob_handle(message: str, session: EqmUserSession):
     loop = asyncio.get_event_loop()
@@ -147,7 +148,6 @@ async def lob_handle(message: str, session: EqmUserSession):
                 lob_var = cur.var(lob_type)
                 # updating lob via update_sql
                 update_sql = f'UPDATE {table} set {field}={empty_lob[lob_type]} where {where} returning {field} into :lob_var'
-                log.debug(update_sql)
                 await loop.run_in_executor(None, functools.partial(cur.execute, update_sql, lob_var=lob_var))
                 lob, = lob_var.getvalue()
                 await session.send_line('* READY')
@@ -162,7 +162,6 @@ async def lob_handle(message: str, session: EqmUserSession):
                 lob.close()
         elif command == 'SELECT_LOB':
             sql = f'SELECT {field} from {table} where {where}'
-            log.debug(sql)
             with session.db_conn.cursor() as cur:
                 await loop.run_in_executor(None, functools.partial(cur.execute, sql))
                 result = await loop.run_in_executor(None, cur.fetchone)
@@ -189,14 +188,14 @@ async def lob_handle(message: str, session: EqmUserSession):
 
     except cx_Oracle.DatabaseError as e:
         err = str(e)
-        log.debug(err)
+        log.debug(e)
         # new line char cause EM to faults
         for c in special_chars:
             err = err.replace(c, special_chars[c])
         await session.send_bad_result(err)
 
-    except Exception:
-        log.error(traceback.format_exc())
+    except Exception as e:
+        log.error(e)
         await session.send_bad_result('internal error')
 
     finally:

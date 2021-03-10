@@ -1,8 +1,8 @@
 import asyncio
 import logging
-import traceback
 from handlers import auth, sql, encryption
 from models.eqm_user_session import EqmUserSession
+from async_timeout import timeout
 
 # handler funcs
 handlers = [{'prefix': 'LOGIN', 'function': auth.doauth},
@@ -21,29 +21,29 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
     log = logging.getLogger(f'Remote {client[0]}, {client[1]}')
     log.debug(f"connected")
     try:
-        while True:
-            # reading all incoming data
-            data = await reader.readuntil(session.eof.encode())
-            if not data:
-                # client disconnected
-                log.debug(f"disconnected")
-                break
-            if session.encryption_key:
-                data = session.decrypt_data(data)
-            message = data.decode()
-            log.debug(f"{message}")
-            # function logic
-            for handler in handlers:
-                if message.startswith(handler['prefix']):
-                    await handler['function'](message, session)
-            del message, data
-    except (asyncio.IncompleteReadError, asyncio.CancelledError):
+        async with timeout(session.max_life):
+            while True:
+                # reading all incoming data
+                data = await reader.readuntil(session.eof.encode())
+                if not data:
+                    # client disconnected
+                    log.debug(f"disconnected")
+                    break
+                if session.encryption_key:
+                    data = session.decrypt_data(data)
+                message = data.decode()
+                # function logic
+                for handler in handlers:
+                    if message.startswith(handler['prefix']):
+                        await handler['function'](message, session)
+                del message, data
+
+    except (asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError):
         pass
     except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as e:
         log.error(f"disconnected {str(e)}")
     except Exception as e:
-        log.error(str(e))
-        log.debug(traceback.format_exc())
+        log.error(e)
         await session.send_bad_result(str(e))
     finally:
         del session

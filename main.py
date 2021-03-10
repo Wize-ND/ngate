@@ -6,7 +6,6 @@ import signal
 import sys
 
 from pid_lock import check_lock, remove_lock
-import traceback
 import yaml
 import db
 from oragate import client_connected
@@ -67,8 +66,7 @@ try:
 except KeyboardInterrupt:
     logging.info('Program interrupted by user (KeyboardInterrupt)')
 except Exception as e:
-    logging.error(str(e))
-    logging.debug(traceback.format_exc())
+    logging.error(e)
 finally:
     remove_lock(args.lock_file)
     logging.info('Server stopped')
