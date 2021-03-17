@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import functools
 import logging
+from logging import handlers
 import signal
 import sys
 
@@ -25,10 +26,15 @@ cfg['oracle']['dsn'] = db.get_oracle_dsn(cfg)
 cfg['ldap_auth_only'] = args.ldap_auth_only
 
 # logging
+log_handlers = []
 log_file = args.log_file or cfg['logging']['filename']
+if log_file:
+    log_handlers.append(logging.FileHandler(filename=log_file, encoding='utf-8'))
+if 'stdout' in cfg['logging']:
+    log_handlers.append(logging.StreamHandler(stream=sys.stdout))
 logging.basicConfig(format='%(asctime)s - %(threadName)s - %(name)s - %(levelname)s: %(message)s',
                     level=cfg['logging']['level'],
-                    filename=log_file)
+                    handlers=log_handlers)
 
 if args.ldap_auth_only and 'ORAGATE_REDIRECT' not in cfg:
     logging.error('Config variable ORAGATE_REDIRECT is not defined. For ldap-auth-only mode this is mandatory')
