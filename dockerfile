@@ -23,6 +23,6 @@ WORKDIR /
 
 COPY . .
 
-RUN pip install --no-cache-dir --no-binary -r requirements.txt
+RUN pip install --no-cache-dir --no-binary cx_Oracle -r requirements.txt
 
 EXPOSE 1976
