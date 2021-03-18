@@ -72,8 +72,8 @@ def format_bind_value(str: str):
         return datetime.datetime.strptime(str, '%Y%m%d_%H%M%S')
     elif re.match(r'^\d+\.\d+$', str):
         return float(str)
-    elif re.match(r'^\d+$', str):
-        return int(str)
+    # elif re.match(r'^\d+$', str):
+    #    return int(str)
     else:
         return str
 

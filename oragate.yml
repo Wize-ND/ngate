@@ -7,7 +7,7 @@ oracle:
   # ora_tns_name = tns_name
 
 network:
-  port: 4200
+  port: 1976
 
 z_memLevel: 8
 
