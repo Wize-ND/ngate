@@ -1,4 +1,4 @@
-FROM python:slim-buster
+FROM python:alpine
 
 # Installing Oracle instant client & libs
 WORKDIR    /opt/oracle
