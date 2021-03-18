@@ -1,6 +1,6 @@
 FROM python:alpine
 
-RUN apk --no-cache add libaio libnsl libc6-compat curl && \
+RUN apk --no-cache add libaio libnsl libc6-compat build-base openldap-dev linux-headers curl && \
     cd /tmp && \
     curl -o instantclient-basiclite.zip https://download.oracle.com/otn_software/linux/instantclient/instantclient-basiclite-linuxx64.zip -SL && \
     unzip instantclient-basiclite.zip && \
@@ -23,6 +23,8 @@ WORKDIR /
 
 COPY . .
 
-RUN pip install --no-cache-dir --no-binary cx_Oracle -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 EXPOSE 1976
+
+CMD [ "python3", "main.py" ]
