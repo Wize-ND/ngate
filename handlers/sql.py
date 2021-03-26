@@ -4,25 +4,7 @@ import functools
 import logging
 import re
 import cx_Oracle
-from models.eqm_user_session import EqmUserSession
-
-special_chars = {'\n': r'\0A', '\r': r'\0D', '\t': r'\09'}
-
-
-def special_encode(input_str):
-    input_str = input_str.replace('\\', '\\\\').replace('\\', '\\\\')
-    for c in special_chars:
-        input_str = input_str.replace(c, special_chars[c])
-    input_str = input_str.replace(',', '\\\\,')
-    return input_str
-
-
-def special_decode(input_str):
-    for c in special_chars:
-        input_str = input_str.replace(special_chars[c], c)
-    input_str = input_str.replace('\\\\', '\\')
-    return input_str.replace('\\,', ',')
-
+from models.eqm_user_session import EqmUserSession, special_decode, special_encode, special_chars
 
 datatypes = {cx_Oracle.DB_TYPE_BINARY_DOUBLE: 'N',
              cx_Oracle.DB_TYPE_BINARY_FLOAT: 'N',
@@ -77,20 +59,18 @@ def format_bind_value(str: str):
     else:
         return str
 
+
 async def sql_handle(message: str, session: EqmUserSession):
     loop = asyncio.get_event_loop()
     log = logging.getLogger('sql_handle')
     sql, full, binds_str = re.findall('query="(.*)" bind_values(_full)?="(.*)"', message)[0]
-    for c in special_chars:
-        sql = sql.replace(special_chars[c], c)
-    sql = sql.replace('\\\\', '\\').replace('\\\\', '\\')
     raw_binds = re.split(r'(?<!\\),', binds_str)
     binds = dict(zip([key[1::] for key in raw_binds[::2]], [format_bind_value(value) for value in raw_binds[1::2]]))
     try:
         with session.db_conn.cursor() as cur:
             cur.prefetchrows = 5000
             cur.arraysize = 5000
-            r = await loop.run_in_executor(None, functools.partial(cur.execute, sql, binds))
+            r = await loop.run_in_executor(None, functools.partial(cur.execute, special_decode(sql), binds))
             if r:
                 header = '* HEADER ' + ','.join([get_column_type(*col) for col in r.description])
                 await session.write_line(header)
@@ -128,6 +108,7 @@ async def sql_handle(message: str, session: EqmUserSession):
     except Exception as e:
         log.error(e)
         await session.send_bad_result('internal error')
+
 
 async def lob_handle(message: str, session: EqmUserSession):
     loop = asyncio.get_event_loop()

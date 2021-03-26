@@ -29,7 +29,6 @@ async def doauth(login_str: str, session: EqmUserSession):
     login_dict = {i.group('key'): i.group('value') for i in
                   re.finditer(r'(?P<key>\w+)="(?P<value>.*?)"\s', login_str, re.MULTILINE)}
     session.update(**login_dict)
-
     if 'ldap' in session.oragate_cfg:
         ldap_success, server_answer = await loop.run_in_executor(None,
                                                                  functools.partial(auth_ldap, session.user, session.password, session.oragate_cfg['ldap']))
@@ -82,6 +81,7 @@ def gen_oracle_credentials(ldap_guid: str, key: str) -> tuple:
 
 
 def auth_ldap(login: str, password: str, server: dict):
+    log = logging.getLogger('auth_ldap')
     ldap_filter = server['filter_users'].format(login)
     connect = ldap.initialize(f'ldap://{server["host"]}')
     connect.set_option(ldap.OPT_REFERRALS, 0)
@@ -98,6 +98,9 @@ def auth_ldap(login: str, password: str, server: dict):
             connect.simple_bind_s(user_dn, password)
             connect.unbind()
             return True, objectGUID
+        except ldap.INVALID_CREDENTIALS as e:
+            log.error(e)
+            return False, 'Неверно имя пользователя/пароль; вход в систему запрещается'
         except Exception as e:
             return False, str(e)
     else:

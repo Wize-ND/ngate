@@ -2,6 +2,23 @@ import asyncio
 import zlib
 from Cryptodome.Cipher import AES
 
+special_chars = {'\n': r'\0A', '\r': r'\0D', '\t': r'\09'}
+
+
+def special_encode(input_str):
+    input_str = input_str.replace('\\', '\\\\').replace('\\', '\\\\')
+    for c in special_chars:
+        input_str = input_str.replace(c, special_chars[c])
+    input_str = input_str.replace(',', '\\\\,')
+    return input_str
+
+
+def special_decode(input_str):
+    for c in special_chars:
+        input_str = input_str.replace(special_chars[c], c)
+    input_str = input_str.replace('\\\\', '\\')
+    return input_str.replace('\\,', ',')
+
 
 async def _deflate(data, compress):
     def deflate():
@@ -17,54 +34,35 @@ class EqmUserSession(object):
     """
     user session storage
     """
+    __slots__ = ('_good_result', '_bad_result', 'eof', 'oragate_cfg', 'user', 'ora_user', 'password', 'app', 'ldap_guid', 'version', 'required_filters',
+                 'desired_filters', 'packet_size', 'local_ip', 'peer_ip', 'peer_port', 'app_session_id', 'session_id', 'personal_id', 'db_conn',
+                 'updated', 'reader', 'writer', 'ziper', 'encryption_key', 'buffer_size', 'max_life')
 
     def update(self, **kwargs):
         """
-        Update __dict__ but only for keys that have been predefined
+        Update attrs but only for attr that have been predefined
         (silently ignore others)
         :param kwargs: session vars
         """
-        self.__dict__.update((key, value) for key, value in kwargs.items() if key in list(self.__dict__.keys()))
+        for k, v in kwargs.items():
+            if k in self.__slots__:
+                setattr(self, k, special_decode(v) if isinstance(v, str) else v)
 
-    def __init__(self, reader: asyncio.streams.StreamReader, writer: asyncio.streams.StreamWriter, **kwargs):
+    def __init__(self, **kwargs):
         # default vars
         # End of response to successfully processed request.
         self._good_result = '+OK'
         # End of response to unsuccessfully processed request.
         self._bad_result = '-ERROR'
         self.eof = '\r\n'
-        self.oragate_cfg = None
-        self.user = None
-        self.ora_user = None
-        self.password = None
-        self.app = None
-        self.ldap_guid = None
-        self.version = None
-        self.required_filters = None
-        self.desired_filters = None
-
         # default packet size for results sending in chunks
         self.packet_size = 5000
-        self.local_ip = None
-        self.peer_ip = None
-        self.peer_port = None
-        self.app_session_id = None
-        self.session_id = None
-        self.personal_id = None
-        self.db_conn = None
-        self.updated = None
-        self.reader = reader
-        self.writer = writer
-        self.ziper = None
-        self.encryption_key = None
         # buffer size for sending packets in SQL
         self.buffer_size = 2 ** 17  # 128 KB
         self.max_life = 36000  # in seconds (36000 = 10 hours)
-
+        self.ziper = None
+        self.encryption_key = None
         self.update(**kwargs)
-
-        if self.required_filters:
-            self.required_filters = self.required_filters.split(',')
 
     def __str__(self):
         return f'user = {self.user}; application = {self.app}; filters = {self.required_filters}; remote host = {self.local_ip}'
