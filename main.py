@@ -28,7 +28,7 @@ cfg['ldap_auth_only'] = args.ldap_auth_only
 # logging
 log_handlers = []
 
-log_file = args.log_file or cfg['logging']['filename'] if 'filename' in cfg else None
+log_file = args.log_file or cfg['logging']['filename'] if 'filename' in cfg['logging'] else None
 if log_file:
     log_handlers.append(logging.FileHandler(filename=log_file, encoding='utf-8'))
 if 'stdout' in cfg['logging']:
