@@ -68,8 +68,8 @@ async def sql_handle(message: str, session: EqmUserSession):
     binds = dict(zip([key[1::] for key in raw_binds[::2]], [format_bind_value(value) for value in raw_binds[1::2]]))
     try:
         with session.db_conn.cursor() as cur:
-            cur.prefetchrows = 5000
-            cur.arraysize = 5000
+            cur.prefetchrows = 1000
+            cur.arraysize = 1000
             r = await loop.run_in_executor(None, functools.partial(cur.execute, special_decode(sql), binds))
             if r:
                 header = '* HEADER ' + ','.join([get_column_type(*col) for col in r.description])
