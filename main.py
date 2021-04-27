@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description='oragate v2')
 parser.add_argument('--config_file', '-c', help='config file, YAML format (oragate.yml by default).', default='oragate.yml')
 parser.add_argument('--port', help="where to listen incoming requests (overrides config 'network.port' key)")
 parser.add_argument('--log_file', help="log file (overrides config 'logging.filename' key)")
-parser.add_argument('--lock_file', help="lock file (/home/equipment/run/oragate-ng.lock by default).", default='oragate-ng.lock')
+parser.add_argument('--lock_file', help="lock file")
 parser.add_argument('--ldap_auth_only', help="Mode ldap-auth-only ldap_config and config variable ORAGATE_REDIRECT required).", action='store_true')
 
 args = parser.parse_args()
@@ -66,7 +66,8 @@ async def main():
 
 
 # pid lock check
-check_lock(args.lock_file)
+if args.lock_file:
+    check_lock(args.lock_file)
 
 try:
     asyncio.run(main())
@@ -75,5 +76,6 @@ except KeyboardInterrupt:
 except Exception as e:
     logging.error(e)
 finally:
-    remove_lock(args.lock_file)
+    if args.lock_file:
+        remove_lock(args.lock_file)
     logging.info('Server stopped')
