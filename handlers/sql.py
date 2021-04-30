@@ -179,6 +179,3 @@ async def lob_handle(message: str, session: EqmUserSession):
         log.error(e)
         await session.send_bad_result('internal error')
 
-    finally:
-        if data:
-            del data
