@@ -24,8 +24,7 @@ cfg = yaml.safe_load(open(args.config_file))
 cfg['network']['port'] = args.port or cfg['network']['port'] or 1976
 cfg['oracle']['dsn'] = db.get_oracle_dsn(cfg)
 cfg['ldap_auth_only'] = args.ldap_auth_only
-cfg['version'] = '3' or cfg['version']
-
+cfg['v'] = '3' or cfg['v']
 # logging
 log_handlers = []
 
