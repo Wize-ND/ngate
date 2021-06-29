@@ -36,7 +36,7 @@ class EqmUserSession(object):
     """
     __slots__ = ('_good_result', '_bad_result', 'eof', 'oragate_cfg', 'user', 'ora_user', 'password', 'app', 'ldap_guid', 'version', 'required_filters',
                  'desired_filters', 'packet_size', 'local_ip', 'peer_ip', 'peer_port', 'app_session_id', 'session_id', 'personal_id', 'db_conn',
-                 'updated', 'reader', 'writer', 'ziper', 'encryption_key', 'buffer_size', 'max_life')
+                 'updated', 'reader', 'writer', 'ziper', 'encryption_key', 'buffer_size', 'max_life', 'version')
 
     def update(self, **kwargs):
         """
@@ -62,6 +62,7 @@ class EqmUserSession(object):
         self.max_life = 36000  # in seconds (36000 = 10 hours)
         self.ziper = None
         self.encryption_key = None
+        self.version = kwargs['cfg']['version']
         self.update(**kwargs)
 
     def __str__(self):

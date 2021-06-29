@@ -63,6 +63,7 @@ def format_bind_value(str: str):
 async def sql_handle(message: str, session: EqmUserSession):
     loop = asyncio.get_event_loop()
     log = logging.getLogger('sql_handle')
+    log.debug(message)
     sql, full, binds_str = re.findall('query="(.*)" bind_values(_full)?="(.*)"', message)[0]
     raw_binds = re.split(r'(?<!\\),', binds_str)
     binds = dict(zip([key[1::] for key in raw_binds[::2]], [format_bind_value(value) for value in raw_binds[1::2]]))
@@ -106,13 +107,14 @@ async def sql_handle(message: str, session: EqmUserSession):
         await session.send_bad_result(err)
 
     except Exception as e:
-        log.error(e)
+        log.error(e, exc_info=True)
         await session.send_bad_result('internal error')
 
 
 async def lob_handle(message: str, session: EqmUserSession):
     loop = asyncio.get_event_loop()
     log = logging.getLogger('sql_handle')
+    log.debug(message)
     try:
         command = message[:10]
         table = re.findall('table="([^"]*)"', message)[0]
@@ -176,6 +178,5 @@ async def lob_handle(message: str, session: EqmUserSession):
         await session.send_bad_result(err)
 
     except Exception as e:
-        log.error(e)
+        log.error(e, exc_info=True)
         await session.send_bad_result('internal error')
-

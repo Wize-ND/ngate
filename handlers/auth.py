@@ -151,7 +151,8 @@ async def auth_oracle(user: str, password, session: EqmUserSession):
             cur.execute('UPDATE user_sessions SET personal_id = :personal_id, pid=:pid, protocol=:protocol, application_ver=:app_ver, '
                         'application_id = (SELECT application_id FROM applications WHERE name=:app), foreign_ip=:peer_name, local_ip=:local_ip, '
                         'session_guid=:app_session_id WHERE session_id=:session_id',
-                        {'personal_id': session.personal_id, 'pid': os.getpid(), 'protocol': '2.0', 'app_ver': session.version, 'app': session.app,
+                        {'personal_id': session.personal_id, 'pid': os.getpid(), 'protocol': session.version, 'app_ver': session.version,
+                         'app': session.app,
                          'peer_name': f'{session.peer_ip}:{session.peer_port}', 'local_ip': session.local_ip, 'app_session_id': session.app_session_id,
                          'session_id': session.session_id})
             conn.commit()

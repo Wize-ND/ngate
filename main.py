@@ -2,14 +2,14 @@ import argparse
 import asyncio
 import functools
 import logging
-from logging import handlers
 import signal
 import sys
 
-from pid_lock import check_lock, remove_lock
 import yaml
+
 import db
 from oragate import client_connected
+from pid_lock import check_lock, remove_lock
 
 # Args section
 parser = argparse.ArgumentParser(description='oragate v2')
@@ -24,6 +24,7 @@ cfg = yaml.safe_load(open(args.config_file))
 cfg['network']['port'] = args.port or cfg['network']['port'] or 1976
 cfg['oracle']['dsn'] = db.get_oracle_dsn(cfg)
 cfg['ldap_auth_only'] = args.ldap_auth_only
+cfg['version'] = '3' or cfg['version']
 
 # logging
 log_handlers = []
