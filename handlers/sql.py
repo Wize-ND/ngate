@@ -113,7 +113,7 @@ async def sql_handle(message: str, session: EqmUserSession):
 
 async def lob_handle(message: str, session: EqmUserSession):
     loop = asyncio.get_event_loop()
-    log = logging.getLogger('sql_handle')
+    log = logging.getLogger('lob_handle')
     log.debug(message)
     try:
         command = message[:10]
