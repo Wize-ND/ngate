@@ -133,7 +133,7 @@ async def lob_handle(message: str, session: EqmUserSession):
                 update_sql = f'UPDATE {table} set {field}={empty_lob[lob_type]} where {where} returning {field} into :lob_var'
                 await loop.run_in_executor(None, functools.partial(cur.execute, update_sql, lob_var=lob_var))
                 lob, = lob_var.getvalue()
-                await session.send_line('* READY')
+                await session.send_line('* Ready')
                 chunk = lob.getchunksize() * 8
                 offset = 1
                 lob.open()
@@ -151,7 +151,7 @@ async def lob_handle(message: str, session: EqmUserSession):
                 if lob:
                     offset = 1
                     chunk = 32767
-                    await session.send_line('* READY')
+                    await session.send_line('* Ready')
                     while True:
                         data = await loop.run_in_executor(None, functools.partial(lob.read, offset, chunk))
                         if data:
