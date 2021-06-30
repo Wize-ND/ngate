@@ -147,9 +147,8 @@ async def lob_handle(message: str, session: EqmUserSession):
             sql = f'SELECT {field} from {table} where {where}'
             with session.db_conn.cursor() as cur:
                 await loop.run_in_executor(None, functools.partial(cur.execute, sql))
-                result = await loop.run_in_executor(None, cur.fetchone)
-                if result:
-                    lob, = result
+                lob, = await loop.run_in_executor(None, cur.fetchone)
+                if lob:
                     offset = 1
                     chunk = 32767
                     await session.send_line('* READY')
