@@ -65,8 +65,13 @@ async def sql_handle(message: str, session: EqmUserSession):
     log = logging.getLogger('sql_handle')
     log.debug(message)
     sql, full, binds_str = re.findall('query="(.*)" bind_values(_full)?="(.*)"', message)[0]
-    raw_binds = re.split(r'(?<!\\),', binds_str)
-    binds = dict(zip([key[1::] for key in raw_binds[::2]], [format_bind_value(value) for value in raw_binds[1::2]]))
+    if full:
+        raw_binds = re.split(r'(?<!\\),', binds_str)
+        binds = dict(zip([key[1::] for key in raw_binds[::2]], [format_bind_value(value) for value in raw_binds[1::2]]))
+    else:
+        for i in range(len(re.findall('\?', sql))):
+            sql = sql.replace('?', f':{i}', 1)
+        binds = binds_str.split(',') if binds_str else {}
     try:
         with session.db_conn.cursor() as cur:
             cur.prefetchrows = 1000
@@ -124,7 +129,7 @@ async def lob_handle(message: str, session: EqmUserSession):
         if command == 'UPDATE_LOB':
             lob_size = int(re.findall('size="(\d+)"', message)[0])
             with session.db_conn.cursor() as cur:
-                # gettin' lob type via select_sql
+                # getting lob type via select_sql
                 select_sql = f'SELECT {field} from {table} where {where}'
                 await loop.run_in_executor(None, functools.partial(cur.execute, select_sql))
                 lob_type = cur.description[0][1]
