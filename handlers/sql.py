@@ -17,6 +17,7 @@ datatypes = {cx_Oracle.DB_TYPE_BINARY_DOUBLE: 'N',
              cx_Oracle.DB_TYPE_TIMESTAMP: 'DT',
              cx_Oracle.DB_TYPE_INTERVAL_DS: 'DT',
              cx_Oracle.DB_TYPE_VARCHAR: 'W',
+             cx_Oracle.DB_TYPE_NVARCHAR: 'W',
              cx_Oracle.DB_TYPE_LONG: 'LONG',
              cx_Oracle.DB_TYPE_ROWID: 'W',
              cx_Oracle.DB_TYPE_CHAR: 'W'}
