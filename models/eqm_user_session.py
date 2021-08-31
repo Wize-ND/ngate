@@ -2,7 +2,8 @@ import asyncio
 import zlib
 from Cryptodome.Cipher import AES
 
-special_chars = {'\n': r'\0A', '\r': r'\0D', '\t': r'\09'}
+# special_chars = {'\n': r'\0A', '\r': r'\0D', '\t': r'\09'}
+special_chars = {chr(n): f'\\{n:02X}' for n in range(0, 32)}
 
 
 def special_encode(input_str):
