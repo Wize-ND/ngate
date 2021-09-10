@@ -4,7 +4,7 @@ import functools
 import logging
 import signal
 import sys
-
+from async_timeout import timeout
 import yaml
 
 import db
@@ -46,7 +46,6 @@ def clean_exit(signame, loop):
     logging.info(f'got signal {signame}, shutting down')
     loop.stop()
 
-
 async def main():
     loop = asyncio.get_event_loop()
     # catch some termination signals
@@ -57,12 +56,15 @@ async def main():
         pass
     # client_connected cb passed as partial because we need some data shared, config for example
     server = await asyncio.start_server(functools.partial(client_connected, cfg=cfg), port=cfg['network']['port'])
-    logging.info(f'Start serving on {", ".join([s.getsockname()[0] + ":" + str(s.getsockname()[1]) for s in server.sockets])}')
-    async with server:
-        try:
+
+    try:
+        async with server:
+            logging.info(f'Start serving on {", ".join([s.getsockname()[0] + ":" + str(s.getsockname()[1]) for s in server.sockets])}')
             await server.serve_forever()
-        finally:
-            await server.wait_closed()
+    except Exception as err:
+        logging.exception(err)
+    finally:
+        logging.info('Server stopped')
 
 
 # pid lock check
@@ -74,8 +76,7 @@ try:
 except KeyboardInterrupt:
     logging.info('Program interrupted by user (KeyboardInterrupt)')
 except Exception as e:
-    logging.error(e)
+    logging.exception(e)
 finally:
     if args.lock_file:
         remove_lock(args.lock_file)
-    logging.info('Server stopped')

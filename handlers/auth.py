@@ -1,9 +1,11 @@
 import asyncio
+import datetime
 import functools
 import hashlib
 import logging
 import os
 import re
+import time
 import uuid
 import zlib
 
@@ -43,7 +45,7 @@ async def doauth(login_str: str, session: EqmUserSession):
             if ldap_success:
                 log.info(f'Successful ldap login : {session}')
                 session.ora_user, session.password = gen_oracle_credentials(server_answer, session.oragate_cfg['ldap']['key'])
-                ora_success, server_answer = await auth_oracle(session.ora_user, session.password, session)
+                ora_success, server_answer = await loop.run_in_executor(None, functools.partial(auth_oracle, session.ora_user, session.password, session))
                 if ora_success:
                     session.db_conn = server_answer
                 else:
@@ -52,7 +54,7 @@ async def doauth(login_str: str, session: EqmUserSession):
                 error = server_answer
                 log.info(f'Access denied : {session}; error message = "{server_answer}"')
     else:
-        ora_success, server_answer = await auth_oracle(session.user, session.password, session)
+        ora_success, server_answer = await loop.run_in_executor(None, functools.partial(auth_oracle, session.user, session.password, session))
         if ora_success:
             if not session.user.lower() == 'em':
                 log.info(f'Successful local login : {session}')
@@ -107,14 +109,17 @@ def auth_ldap(login: str, password: str, server: dict):
         return False, f'person ({login}) not found'
 
 
-async def auth_oracle(user: str, password, session: EqmUserSession):
-    loop = asyncio.get_event_loop()
+def auth_oracle(user: str, password, session: EqmUserSession):
     try:
-        conn = await loop.run_in_executor(None, functools.partial(cx_Oracle.connect, user=user,
-                                                                  password=password,
-                                                                  threaded=True,
-                                                                  encoding='UTF-8',
-                                                                  dsn=session.oragate_cfg['oracle']['dsn']))
+        conn = cx_Oracle.connect(user=user,
+                                 password=password,
+                                 threaded=True,
+                                 encoding='UTF-8',
+                                 dsn=session.oragate_cfg['oracle']['dsn'])
+        if session.app == 'ojobd':
+            conn.call_timeout = 10 * 60 * 60 * 1000  # 10 hours
+        else:
+            conn.call_timeout = session.call_timeout
         if user.lower() == 'em':
             return True, conn
         with conn.cursor() as cur:

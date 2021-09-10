@@ -113,7 +113,7 @@ async def sql_handle(message: str, session: EqmUserSession):
         await session.send_bad_result(err)
 
     except Exception as e:
-        log.error(e, exc_info=True)
+        log.exception(e)
         await session.send_bad_result('internal error')
 
 

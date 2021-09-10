@@ -37,7 +37,7 @@ class EqmUserSession(object):
     """
     __slots__ = ('_good_result', '_bad_result', 'eof', 'oragate_cfg', 'user', 'ora_user', 'password', 'app', 'ldap_guid', 'version', 'required_filters',
                  'desired_filters', 'packet_size', 'local_ip', 'peer_ip', 'peer_port', 'app_session_id', 'session_id', 'personal_id', 'db_conn',
-                 'updated', 'reader', 'writer', 'ziper', 'encryption_key', 'buffer_size', 'max_life', 'v')
+                 'updated', 'reader', 'writer', 'ziper', 'encryption_key', 'buffer_size', 'call_timeout', 'v')
 
     def update(self, **kwargs):
         """
@@ -60,7 +60,9 @@ class EqmUserSession(object):
         self.packet_size = 5000
         # buffer size for sending packets in SQL
         self.buffer_size = 2 ** 17  # 128 KB
-        self.max_life = 36000  # in seconds (36000 = 10 hours)
+        #  amount of time (in milliseconds) that a single round-trip to the database may take before a timeout will occur.
+        self.call_timeout = 60 * 60 * 1000  # 1 hour
+        self.db_conn = None
         self.ziper = None
         self.encryption_key = None
         self.v = kwargs['oragate_cfg']['v']
@@ -68,6 +70,10 @@ class EqmUserSession(object):
 
     def __str__(self):
         return f'user = {self.user}; application = {self.app}; filters = {self.required_filters}; remote host = {self.local_ip}'
+
+    def __del__(self):
+        if self.db_conn:
+            self.db_conn.close()
 
     def decrypt_data(self, data: bytes):
         return AES.new(self.encryption_key[0], AES.MODE_CTR, nonce=self.encryption_key[1]).decrypt(data)
