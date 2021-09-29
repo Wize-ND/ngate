@@ -155,21 +155,27 @@ async def lob_handle(message: str, session: EqmUserSession):
                 await loop.run_in_executor(None, functools.partial(cur.execute, sql))
                 lob = await loop.run_in_executor(None, cur.fetchone)
                 if lob:
-                    offset = 1
-                    chunk = 32767
                     await session.send_line('* Ready')
+                    offset = 1
+                    max_chunk = 32767
+                    chunk = max_chunk
+                    if lob[0].type == cx_Oracle.DB_TYPE_CLOB:
+                        chunk = 28000
+
                     while True:
-                        data = await loop.run_in_executor(None, functools.partial(lob[0].read, offset, chunk))
-                        if data:
-                            if len(data) < chunk:
-                                data_size = chunk + 1 + len(data)
+                        raw_data = await loop.run_in_executor(None, functools.partial(lob[0].read, offset, chunk))
+                        if raw_data:
+                            data = raw_data.encode() if isinstance(raw_data, str) else raw_data
+
+                            if len(raw_data) < chunk:
+                                data_size = max_chunk + 1 + len(data)
                             else:
-                                data_size = chunk
+                                data_size = len(data)
                             await session.write_binary(data_size.to_bytes(2, 'little'))
-                            await session.write_binary(data.encode() if isinstance(data, str) else data)
+                            await session.write_binary(data)
                             await session.writer.drain()
-                        if len(data) < chunk:
-                            break
+                            if len(data) < chunk:
+                                break
                         offset += len(data)
 
         await session.send_good_result()
