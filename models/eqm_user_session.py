@@ -71,10 +71,6 @@ class EqmUserSession(object):
     def __str__(self):
         return f'user = {self.user}; application = {self.app}; filters = {self.required_filters}; remote host = {self.local_ip}'
 
-    def __del__(self):
-        if self.db_conn:
-            self.db_conn.close()
-
     def decrypt_data(self, data: bytes):
         return AES.new(self.encryption_key[0], AES.MODE_CTR, nonce=self.encryption_key[1]).decrypt(data)
 

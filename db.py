@@ -43,12 +43,6 @@ class OracleConnect(object):
                                       encoding='UTF-8',
                                       dsn=cfg['oracle']['dsn'])
 
-    def __del__(self):
-        try:
-            self.conn.close()
-        except Exception as e:
-            self.logger.debug(str(e))
-
     def execute(self, **kwargs):
         """
         execute a statement (sql or psql)
