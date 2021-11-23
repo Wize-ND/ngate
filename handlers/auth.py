@@ -1,18 +1,16 @@
 import asyncio
-import datetime
 import functools
 import hashlib
 import logging
 import os
 import re
-import time
 import uuid
 import zlib
 
 import cx_Oracle
 import ldap
 
-from models.eqm_user_session import EqmUserSession
+from models.eqm_user_session import EqmUserSession, sync_to_async
 from db import default_output
 
 
@@ -166,3 +164,38 @@ def auth_oracle(user: str, password, session: EqmUserSession):
     except Exception as e:
         return False, str(e)
     return True, conn
+
+
+async def recover_passw(message: str, session: EqmUserSession):
+    log = logging.getLogger('recover_passw')
+    log.debug(message)
+    login = re.search(r'^RECOVER login="(\w+)"', message).group(1)
+    if not login:
+        await session.send_bad_result('incorrect login')
+        return
+
+    error = await recover_oracle(login, session.oragate_cfg['oracle']['dsn'])
+    if error:
+        await session.send_bad_result(error)
+    await session.send_good_result()
+
+
+@sync_to_async
+def recover_oracle(login: str, dsn):
+    log = logging.getLogger('recover_oracle')
+    try:
+        with cx_Oracle.connect(user='em', password='em_server_access', dsn=dsn, encoding="UTF-8") as conn:
+            with conn.cursor() as cur:
+                cur.execute('BEGIN os_lib.asys_utils.p_change_password(:login); END;', login=login)
+                conn.commit()
+
+    except cx_Oracle.DatabaseError as e:
+        log.error(e)
+        error, = e.args
+        msg = re.search(r'^ORA.\d+:\s(.*)', error.message)
+        msg = msg.group(1) if msg else error.message
+        return msg
+
+    except Exception as e:
+        log.error(e)
+        return str(e)

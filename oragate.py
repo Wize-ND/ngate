@@ -5,6 +5,7 @@ from models.eqm_user_session import EqmUserSession
 
 # handler funcs
 handlers = [{'prefix': 'LOGIN', 'function': auth.doauth},
+            {'prefix': 'RECOVER', 'function': auth.recover_passw},
             {'prefix': 'SQL', 'function': sql.sql_handle},
             {'prefix': 'SELECT_LOB', 'function': sql.lob_handle},
             {'prefix': 'UPDATE_LOB', 'function': sql.lob_handle},

@@ -1,9 +1,16 @@
 import asyncio
+import functools
 import zlib
 from Cryptodome.Cipher import AES
 
-# special_chars = {'\n': r'\0A', '\r': r'\0D', '\t': r'\09'}
 special_chars = {chr(n): f'\\{n:02X}' for n in range(0, 32)}
+
+
+def sync_to_async(f):
+    async def wrapped(*args, **kwargs):
+        return await asyncio.get_event_loop().run_in_executor(None, functools.partial(f, *args, **kwargs))
+
+    return wrapped
 
 
 def special_encode(input_str):
