@@ -1,4 +1,3 @@
-import logging
 import cx_Oracle
 
 
@@ -36,7 +35,6 @@ class OracleConnect(object):
 
     def __init__(self, cfg):
         self.cfg = cfg
-        self.logger = logging.getLogger('Oracle_connection')
         self.conn = cx_Oracle.connect(user=cfg['oracle']['ora_user'],
                                       password=cfg['oracle']['ora_pass'],
                                       threaded=True,

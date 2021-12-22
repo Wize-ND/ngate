@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import concurrent.futures
 import functools
 import logging
 import queue
@@ -31,6 +32,16 @@ cfg['oracle']['dsn'] = db.get_oracle_dsn(cfg)
 cfg['ldap_auth_only'] = args.ldap_auth_only
 cfg['v'] = '3' or cfg['v']
 
+# log_handlers = []
+# log_file = args.log_file or cfg['logging']['filename'] if 'filename' in cfg['logging'] else None
+# if log_file:
+#     log_handlers.append(logging.FileHandler(filename=log_file, encoding='utf-8'))
+# if 'stdout' in cfg['logging']:
+#     log_handlers.append(logging.StreamHandler(stream=sys.stdout))
+# logging.basicConfig(format='%(asctime)s - %(threadName)s - %(name)s - %(levelname)s: %(message)s',
+#                     level=cfg['logging']['level'],
+#                     handlers=log_handlers)
+
 # logging
 log_extra = dict(unique_name='main')
 que = queue.Queue(-1)  # no limit on size
@@ -56,6 +67,8 @@ def clean_exit(signame, loop):
 
 async def main():
     loop = asyncio.get_event_loop()
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=2000)
+    loop.set_default_executor(executor)
     # catch some termination signals
     try:
         for signame in ('SIGINT', 'SIGTERM', 'SIGHUP', 'SIGABRT', 'SIGALRM'):
@@ -63,7 +76,7 @@ async def main():
     except NotImplementedError:
         pass
     # client_connected cb passed as partial because we need some data shared, config for example
-    server = await asyncio.start_server(functools.partial(client_connected, cfg=cfg), port=cfg['network']['port'], backlog=0)
+    server = await asyncio.start_server(functools.partial(client_connected, cfg=cfg.copy()), port=cfg['network']['port'], backlog=0)
 
     async with server:
         log.info(f'Start serving on {", ".join([s.getsockname()[0] + ":" + str(s.getsockname()[1]) for s in server.sockets])}', extra=log_extra)
@@ -71,14 +84,12 @@ async def main():
         await server.wait_closed()
     log.info('Server stopped', extra=log_extra)
 
-
 # pid lock check
 if args.lock_file:
     check_lock(args.lock_file)
 
 try:
     import uvloop
-
     uvloop.install()
     log.debug('using uvloop', extra=log_extra)
 except ImportError:

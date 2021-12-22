@@ -67,6 +67,7 @@ class EqmUserSession(object):
     #  amount of time (in milliseconds) that a single round-trip to the database may take before a timeout will occur.
     call_timeout = 60 * 60 * 1000  # 1 hour
     db_conn: Optional[cx_Oracle.Connection]
+    oragate_cfg: dict
 
     def update(self, **kwargs):
         """

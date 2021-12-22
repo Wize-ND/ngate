@@ -12,6 +12,6 @@ network:
 z_memLevel: 8
 
 logging:
-  level: DEBUG
+  level: INFO
   #filename: oragate.log
   stdout:
