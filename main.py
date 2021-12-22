@@ -80,7 +80,7 @@ try:
     import uvloop
 
     uvloop.install()
-    log.debug('using uvloop')
+    log.debug('using uvloop', extra=log_extra)
 except ImportError:
     log.debug('uvloop not available, using asyncio loop', extra=log_extra)
     pass
