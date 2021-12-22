@@ -4,7 +4,7 @@ import functools
 import logging
 import re
 import cx_Oracle
-from models.eqm_user_session import EqmUserSession, special_decode, special_encode, special_chars
+from models.eqm_user_session import EqmUserSession, special_decode, special_encode, special_chars, sync_to_async
 
 datatypes = {cx_Oracle.DB_TYPE_BINARY_DOUBLE: 'N',
              cx_Oracle.DB_TYPE_BINARY_FLOAT: 'N',
@@ -55,16 +55,15 @@ def format_bind_value(str: str):
         return datetime.datetime.strptime(str, '%Y%m%d_%H%M%S')
     elif re.match(r'^\d+\.\d+$', str):
         return float(str)
-    # elif re.match(r'^\d+$', str):
-    #    return int(str)
     else:
         return str
 
 
 async def sql_handle(message: str, session: EqmUserSession):
     loop = asyncio.get_event_loop()
-    log = logging.getLogger('sql_handle')
-    log.debug(message)
+    log = logging.getLogger('main')
+    log_extra = dict(unique_name='sql_handle')
+    log.debug(message, extra=log_extra)
     sql, full, binds_str = re.findall('query="(.*)" bind_values(_full)?="(.*)"', message)[0]
     if full:
         raw_binds = re.split(r'(?<!\\),', binds_str)
@@ -74,53 +73,53 @@ async def sql_handle(message: str, session: EqmUserSession):
             sql = sql.replace('?', f':{i}', 1)
         binds = binds_str.split(',') if binds_str else {}
     try:
-        with session.db_conn.cursor() as cur:
-            cur.prefetchrows = 1000
-            cur.arraysize = 1000
-            r = await loop.run_in_executor(None, functools.partial(cur.execute, special_decode(sql), binds))
-            if r:
-                header = '* HEADER ' + ','.join([get_column_type(*col) for col in r.description])
-                await session.write_line(header)
-                r.rowfactory = oragate_rowfactory
-                buffer = bytearray()
-                while True:
-                    rows = await loop.run_in_executor(None, functools.partial(cur.fetchmany, int(session.packet_size)))
-                    if not rows:
-                        buffer += session.wrap_line(session.good_result).encode()
-                        break
-                    buffer += session.wrap_line(f'* PACKET {len(rows)}').encode()
-                    for row in rows:
-                        if len(buffer) + len(row) >= session.buffer_size:
-                            await session.write_binary(buffer)
-                            await session.writer.drain()
-                            buffer = session.wrap_line(f'* {row}').encode()
-                        else:
-                            buffer += session.wrap_line(f'* {row}').encode()
-                if buffer:
-                    await session.write_binary(buffer)
-                    await session.writer.drain()
-                del buffer
-            else:
-                await session.write_line(f'* {str(cur.rowcount)}')
-                await session.send_good_result()
-
+        cur = await loop.run_in_executor(None, session.db_conn.cursor)
+        cur.prefetchrows = 1000
+        cur.arraysize = 1000
+        r = await loop.run_in_executor(None, functools.partial(cur.execute, special_decode(sql), binds))
+        if r:
+            header = '* HEADER ' + ','.join([get_column_type(*col) for col in r.description])
+            await session.write_line(header)
+            r.rowfactory = oragate_rowfactory
+            buffer = bytearray()
+            while True:
+                rows = await loop.run_in_executor(None, functools.partial(cur.fetchmany, int(session.packet_size)))
+                if not rows:
+                    buffer += session.wrap_line(session.good_result).encode()
+                    break
+                buffer += session.wrap_line(f'* PACKET {len(rows)}').encode()
+                for row in rows:
+                    if len(buffer) + len(row) >= session.buffer_size:
+                        await session.write_binary(buffer)
+                        await session.writer.drain()
+                        buffer = session.wrap_line(f'* {row}').encode()
+                    else:
+                        buffer += session.wrap_line(f'* {row}').encode()
+            if buffer:
+                await session.write_binary(buffer)
+                await session.writer.drain()
+        else:
+            await session.write_line(f'* {str(cur.rowcount)}')
+            await session.send_good_result()
+        cur.close()
     except cx_Oracle.DatabaseError as e:
         err = str(e)
-        log.debug(err)
+        log.debug(err, extra=log_extra)
         # new line char cause EM to faults
         for c in special_chars:
             err = err.replace(c, special_chars[c])
         await session.send_bad_result(err)
 
     except Exception as e:
-        log.exception(e)
+        log.exception(e, extra=log_extra)
         await session.send_bad_result('internal error')
 
 
 async def lob_handle(message: str, session: EqmUserSession):
     loop = asyncio.get_event_loop()
-    log = logging.getLogger('lob_handle')
-    log.debug(message)
+    log = logging.getLogger('main')
+    log_extra = dict(unique_name='lob_handle')
+    log.debug(message, extra=log_extra)
     try:
         command = message[:10]
         table = re.findall('table="([^"]*)"', message)[0]
@@ -129,65 +128,67 @@ async def lob_handle(message: str, session: EqmUserSession):
 
         if command == 'UPDATE_LOB':
             lob_size = int(re.findall('size="(\d+)"', message)[0])
-            with session.db_conn.cursor() as cur:
-                # getting lob type via select_sql
-                select_sql = f'SELECT {field} from {table} where {where}'
-                await loop.run_in_executor(None, functools.partial(cur.execute, select_sql))
-                lob_type = cur.description[0][1]
-                lob_var = cur.var(lob_type)
-                # updating lob via update_sql
-                update_sql = f'UPDATE {table} set {field}={empty_lob[lob_type]} where {where} returning {field} into :lob_var'
-                await loop.run_in_executor(None, functools.partial(cur.execute, update_sql, lob_var=lob_var))
-                lob, = lob_var.getvalue()
-                await session.send_line('* Ready')
-                chunk = lob.getchunksize() * 8
-                offset = 1
-                lob.open()
-                while offset < lob_size:
-                    data = await session.read_data(chunk)
-                    if data:
-                        await loop.run_in_executor(None, functools.partial(lob.write, data, offset))
-                    offset += len(data)
-                lob.close()
-        elif command == 'SELECT_LOB':
+            cur = await loop.run_in_executor(None, session.db_conn.cursor)
+            # getting lob type via select_sql
+            select_sql = f'SELECT {field} from {table} where {where}'
+            await loop.run_in_executor(None, functools.partial(cur.execute, select_sql))
+            lob_type = cur.description[0][1]
+            lob_var = cur.var(lob_type)
+            # updating lob via update_sql
+            update_sql = f'UPDATE {table} set {field}={empty_lob[lob_type]} where {where} returning {field} into :lob_var'
+            await loop.run_in_executor(None, functools.partial(cur.execute, update_sql, lob_var=lob_var))
+            lob, = lob_var.getvalue()
+            await session.send_line('* Ready')
+            chunk = lob.getchunksize() * 8
+            offset = 1
+            lob.open()
+            while offset < lob_size:
+                data = await session.read_data(chunk)
+                if data:
+                    await loop.run_in_executor(None, functools.partial(lob.write, data, offset))
+                offset += len(data)
+            lob.close()
+            cur.close()
+
+        if command == 'SELECT_LOB':
             sql = f'SELECT {field} from {table} where {where}'
-            with session.db_conn.cursor() as cur:
-                await loop.run_in_executor(None, functools.partial(cur.execute, sql))
-                lob = await loop.run_in_executor(None, cur.fetchone)
-                if lob:
-                    await session.send_line('* Ready')
-                    offset = 1
-                    max_chunk = 32767
-                    chunk = max_chunk
-                    if lob[0].type == cx_Oracle.DB_TYPE_CLOB:
-                        chunk = 28000
+            cur = await loop.run_in_executor(None, session.db_conn.cursor)
+            await loop.run_in_executor(None, functools.partial(cur.execute, sql))
+            lob = await loop.run_in_executor(None, cur.fetchone)
+            if lob:
+                await session.send_line('* Ready')
+                offset = 1
+                max_chunk = 32767
+                chunk = max_chunk
+                if lob[0].type == cx_Oracle.DB_TYPE_CLOB:
+                    chunk = 28000
 
-                    while True:
-                        raw_data = await loop.run_in_executor(None, functools.partial(lob[0].read, offset, chunk))
-                        if raw_data:
-                            data = raw_data.encode() if isinstance(raw_data, str) else raw_data
+                while True:
+                    raw_data = await loop.run_in_executor(None, functools.partial(lob[0].read, offset, chunk))
+                    if raw_data:
+                        data = raw_data.encode() if isinstance(raw_data, str) else raw_data
 
-                            if len(raw_data) < chunk:
-                                data_size = max_chunk + 1 + len(data)
-                            else:
-                                data_size = len(data)
-                            await session.write_binary(data_size.to_bytes(2, 'little'))
-                            await session.write_binary(data)
-                            await session.writer.drain()
-                            if len(data) < chunk:
-                                break
-                        offset += len(data)
-
+                        if len(raw_data) < chunk:
+                            data_size = max_chunk + 1 + len(data)
+                        else:
+                            data_size = len(data)
+                        await session.write_binary(data_size.to_bytes(2, 'little'))
+                        await session.write_binary(data)
+                        await session.writer.drain()
+                        if len(data) < chunk:
+                            break
+                    offset += len(data)
+            cur.close()
         await session.send_good_result()
 
     except cx_Oracle.DatabaseError as e:
         err = str(e)
-        log.debug(e)
+        log.debug(e, extra=log_extra)
         # new line char cause EM to faults
         for c in special_chars:
             err = err.replace(c, special_chars[c])
         await session.send_bad_result(err)
 
     except Exception as e:
-        log.error(e, exc_info=True)
+        log.exception(e, extra=log_extra)
         await session.send_bad_result('internal error')

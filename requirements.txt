@@ -1,6 +1,5 @@
+uvloop
 PyYAML
 psutil
 cx_Oracle
 python-ldap
-pycryptodomex
-async_timeout

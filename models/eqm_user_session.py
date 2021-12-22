@@ -1,14 +1,23 @@
 import asyncio
 import functools
 import zlib
-from Cryptodome.Cipher import AES
+from typing import Optional
+
+import cx_Oracle
 
 special_chars = {chr(n): f'\\{n:02X}' for n in range(0, 32)}
 
 
 def sync_to_async(f):
+    """
+    Wrapper function for sync functions to execute them in default(thread) pool asynchronously
+    :param f: function
+    :return: awaited coroutine(f)
+    """
+
+    @functools.wraps(f)
     async def wrapped(*args, **kwargs):
-        return await asyncio.get_event_loop().run_in_executor(None, functools.partial(f, *args, **kwargs))
+        return await asyncio.get_running_loop().run_in_executor(None, functools.partial(f, *args, **kwargs))
 
     return wrapped
 
@@ -38,13 +47,26 @@ async def _deflate(data, compress):
     return await loop.run_in_executor(None, deflate)
 
 
+
 class EqmUserSession(object):
     """
     user session storage
     """
-    __slots__ = ('_good_result', '_bad_result', 'eof', 'oragate_cfg', 'user', 'ora_user', 'password', 'app', 'ldap_guid', 'version', 'required_filters',
-                 'desired_filters', 'packet_size', 'local_ip', 'peer_ip', 'peer_port', 'app_session_id', 'session_id', 'personal_id', 'db_conn',
-                 'updated', 'reader', 'writer', 'ziper', 'encryption_key', 'buffer_size', 'call_timeout', 'v')
+    __slots__ = ('oragate_cfg', 'user', 'ora_user', 'password', 'app', 'ldap_guid', 'version', 'required_filters',
+                 'desired_filters', 'local_ip', 'peer_ip', 'peer_port', 'app_session_id', 'session_id', 'personal_id',
+                 'updated', 'reader', 'writer', 'v', 'db_conn', 'ziper')
+    # default vars
+    # End of response to successfully processed request.
+    _good_result = '+OK'
+    # End of response to unsuccessfully processed request.
+    _bad_result = '-ERROR'
+    eof = '\r\n'
+    packet_size = 5000
+    # buffer size for sending packets in SQL
+    buffer_size = 2 ** 17  # 128 KB
+    #  amount of time (in milliseconds) that a single round-trip to the database may take before a timeout will occur.
+    call_timeout = 60 * 60 * 1000  # 1 hour
+    db_conn: Optional[cx_Oracle.Connection]
 
     def update(self, **kwargs):
         """
@@ -57,38 +79,17 @@ class EqmUserSession(object):
                 setattr(self, k, special_decode(v) if isinstance(v, str) else v)
 
     def __init__(self, **kwargs):
-        # default vars
-        # End of response to successfully processed request.
-        self._good_result = '+OK'
-        # End of response to unsuccessfully processed request.
-        self._bad_result = '-ERROR'
-        self.eof = '\r\n'
-        # default packet size for results sending in chunks
-        self.packet_size = 5000
-        # buffer size for sending packets in SQL
-        self.buffer_size = 2 ** 17  # 128 KB
-        #  amount of time (in milliseconds) that a single round-trip to the database may take before a timeout will occur.
-        self.call_timeout = 60 * 60 * 1000  # 1 hour
         self.db_conn = None
         self.ziper = None
-        self.encryption_key = None
         self.v = kwargs['oragate_cfg']['v']
         self.update(**kwargs)
 
     def __str__(self):
         return f'user = {self.user}; application = {self.app}; filters = {self.required_filters}; remote host = {self.local_ip}'
 
-    def decrypt_data(self, data: bytes):
-        return AES.new(self.encryption_key[0], AES.MODE_CTR, nonce=self.encryption_key[1]).decrypt(data)
-
-    def encrypt_data(self, data: bytes):
-        return AES.new(self.encryption_key[0], AES.MODE_CTR, nonce=self.encryption_key[1]).encrypt(data)
-
     async def apply_filters(self, data: bytes):
         if self.ziper:
             data = await _deflate(data, self.ziper)
-        if self.encryption_key:
-            data = self.encrypt_data(data)
         return data
 
     async def read_data(self, n: int):
@@ -97,8 +98,6 @@ class EqmUserSession(object):
         :param n: num bytes to read
         """
         data = await self.reader.read(n)
-        if self.encryption_key:
-            data = AES.new(self.encryption_key, AES.MODE_CTR).decrypt(data)
         return data
 
     async def send_line(self, line: str):

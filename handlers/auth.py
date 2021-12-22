@@ -1,5 +1,3 @@
-import asyncio
-import functools
 import hashlib
 import logging
 import os
@@ -21,8 +19,8 @@ async def doauth(login_str: str, session: EqmUserSession):
     :param session: EqmUserSession
     :return: False/True, error(str)/session_parameters(dict)
     """
-    loop = asyncio.get_event_loop()
-    log = logging.getLogger('auth')
+    log = logging.getLogger('main')
+    log_extra = dict(unique_name='auth')
     message = ''
     error = None
 
@@ -30,36 +28,35 @@ async def doauth(login_str: str, session: EqmUserSession):
                   re.finditer(r'(?P<key>\w+)="(?P<value>.*?)"\s', login_str, re.MULTILINE)}
     session.update(**login_dict)
     if 'ldap' in session.oragate_cfg:
-        ldap_success, server_answer = await loop.run_in_executor(None,
-                                                                 functools.partial(auth_ldap, session.user, session.password, session.oragate_cfg['ldap']))
+        ldap_success, server_answer = await auth_ldap(session.user, session.password, session.oragate_cfg['ldap'])
         if session.oragate_cfg['ldap_auth_only']:
             if ldap_success:
                 message = f'redirect="{session.oragate_cfg["ORAGATE_REDIRECT"]}" ldap_guid="{server_answer}"'
-                log.info(f'Successful ldap-auth-only : {session} ldap_guid = {server_answer}')
+                log.info(f'Successful ldap-auth-only : {session} ldap_guid = {server_answer}', extra=log_extra)
             else:
                 error = server_answer
-                log.info(f'Access denied : {session}; error message = "{server_answer}"')
+                log.info(f'Access denied : {session}; error message = "{server_answer}"', extra=log_extra)
         else:
             if ldap_success:
-                log.info(f'Successful ldap login : {session}')
+                log.info(f'Successful ldap login : {session}', extra=log_extra)
                 session.ora_user, session.password = gen_oracle_credentials(server_answer, session.oragate_cfg['ldap']['key'])
-                ora_success, server_answer = await loop.run_in_executor(None, functools.partial(auth_oracle, session.ora_user, session.password, session))
+                ora_success, server_answer = await auth_oracle(session.ora_user, session.password, session)
                 if ora_success:
                     session.db_conn = server_answer
                 else:
                     error = server_answer
             else:
                 error = server_answer
-                log.info(f'Access denied : {session}; error message = "{server_answer}"')
+                log.info(f'Access denied : {session}; error message = "{server_answer}"', extra=log_extra)
     else:
-        ora_success, server_answer = await loop.run_in_executor(None, functools.partial(auth_oracle, session.user, session.password, session))
+        ora_success, server_answer = await auth_oracle(session.user, session.password, session)
         if ora_success:
             if not session.user.lower() == 'em':
-                log.info(f'Successful local login : {session}')
+                log.info(f'Successful local login : {session}', extra=log_extra)
             session.db_conn = server_answer
         else:
             error = server_answer
-            log.info(f'Access denied : {session}; error message = "{server_answer}"')
+            log.info(f'Access denied : {session}; error message = "{server_answer}"', extra=log_extra)
 
     if not error:
         if 'zlib' in session.required_filters:
@@ -80,17 +77,19 @@ def gen_oracle_credentials(ldap_guid: str, key: str) -> tuple:
     return f'L0_{baseN(int(ldap_guid, 16), 37)}', f'P0_{baseN(int(hashlib.md5((ldap_guid + key).encode()).hexdigest(), 16), 37)}'
 
 
+@sync_to_async
 def auth_ldap(login: str, password: str, server: dict):
-    log = logging.getLogger('auth_ldap')
+    log = logging.getLogger('main')
+    log_extra = dict(unique_name='auth_ldap')
     ldap_filter = server['filter_users'].format(login)
     connect = ldap.initialize(f'ldap://{server["host"]}')
     connect.set_option(ldap.OPT_REFERRALS, 0)
     connect.simple_bind_s(server['bind_dn'], server['password'])
     answers = connect.search_s(server['base_user_dn'], ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'])
     user_found = None
-    for asnwer in answers:
-        if asnwer[0] is not None:
-            user_found, user_dn, objectGUID = True, asnwer[0], uuid.UUID(bytes_le=asnwer[1]['objectGUID'][0]).hex.upper()
+    for answer in answers:
+        if answer[0] is not None:
+            user_found, user_dn, objectGUID = True, answer[0], uuid.UUID(bytes_le=answer[1]['objectGUID'][0]).hex.upper()
             break
 
     if user_found:
@@ -99,7 +98,7 @@ def auth_ldap(login: str, password: str, server: dict):
             connect.unbind()
             return True, objectGUID
         except ldap.INVALID_CREDENTIALS as e:
-            log.error(e)
+            log.error(e, extra=log_extra)
             return False, 'Неверно имя пользователя/пароль; вход в систему запрещается'
         except Exception as e:
             return False, str(e)
@@ -107,6 +106,7 @@ def auth_ldap(login: str, password: str, server: dict):
         return False, f'person ({login}) not found'
 
 
+@sync_to_async
 def auth_oracle(user: str, password, session: EqmUserSession):
     try:
         conn = cx_Oracle.connect(user=user,
@@ -149,7 +149,7 @@ def auth_oracle(user: str, password, session: EqmUserSession):
                     return False, f'User {session.user} does not have access to {session.app}'
                 session.personal_id = result['personal_id']
             else:
-                return False, f'{session.user}  not in personal.'
+                return False, f'{session.user} not in personal.'
 
             cur.execute('UPDATE user_sessions SET personal_id = :personal_id, pid=:pid, protocol=:protocol, application_ver=:app_ver, '
                         'application_id = (SELECT application_id FROM applications WHERE name=:app), foreign_ip=:peer_name, local_ip=:local_ip, '
@@ -167,8 +167,9 @@ def auth_oracle(user: str, password, session: EqmUserSession):
 
 
 async def recover_passw(message: str, session: EqmUserSession):
-    log = logging.getLogger('recover_passw')
-    log.debug(message)
+    log = logging.getLogger('main')
+    log_extra = dict(unique_name='recover_passw')
+    log.debug(message, extra=log_extra)
     login = re.search(r'^RECOVER login="(\w+)"', message).group(1)
     if not login:
         await session.send_bad_result('incorrect login')
@@ -182,7 +183,8 @@ async def recover_passw(message: str, session: EqmUserSession):
 
 @sync_to_async
 def recover_oracle(login: str, dsn):
-    log = logging.getLogger('recover_oracle')
+    log = logging.getLogger('main')
+    log_extra = dict(unique_name='recover_oracle')
     try:
         with cx_Oracle.connect(user='em', password='em_server_access', dsn=dsn, encoding="UTF-8") as conn:
             with conn.cursor() as cur:
@@ -190,7 +192,7 @@ def recover_oracle(login: str, dsn):
                 conn.commit()
 
     except cx_Oracle.DatabaseError as e:
-        log.error(e)
+        log.error(e, extra=log_extra)
         error, = e.args
         msg = re.search(r'^ORA.\d+:\s(.*)', error.message)
         msg = msg.group(1) if msg else error.message
