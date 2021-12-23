@@ -9,7 +9,20 @@ import cx_Oracle
 import ldap
 
 from models.eqm_user_session import EqmUserSession, sync_to_async
-from db import default_output
+
+
+def default_output(cur: cx_Oracle.Cursor):
+    """
+    default output of fetch
+    :param cur: cx_Oracle.Cursor
+    :return: list of dicts or {} if cursor is empty
+    """
+    columns = [col[0].lower() for col in cur.description]
+    cur.rowfactory = lambda *args: dict(zip(columns, args))
+    result = [row for row in cur.fetchall()] if cur else {}
+    if len(result) == 1:
+        result = result[0]
+    return result
 
 
 async def doauth(login_str: str, session: EqmUserSession):
@@ -108,12 +121,14 @@ def auth_ldap(login: str, password: str, server: dict):
 
 @sync_to_async
 def auth_oracle(user: str, password, session: EqmUserSession):
+    conn = None
     try:
-        conn = cx_Oracle.connect(user=user,
-                                 password=password,
-                                 threaded=True,
-                                 encoding='UTF-8',
-                                 dsn=session.oragate_cfg['oracle']['dsn'])
+        conn = session.oragate_cfg['pool'].acquire(user=user, password=password)
+        # conn = cx_Oracle.connect(user=user,
+        #                          password=password,
+        #                          threaded=True,
+        #                          encoding='UTF-8',
+        #                          dsn=session.oragate_cfg['oracle']['dsn'])
         if session.app == 'ojobd':
             conn.call_timeout = 10 * 60 * 60 * 1000  # 10 hours
         else:
@@ -142,13 +157,17 @@ def auth_oracle(user: str, password, session: EqmUserSession):
             if r:
                 result = default_output(r)
                 if result['user_active'] == 0:
+                    session.oragate_cfg['pool'].release(conn)
                     return False, f'{session.user}  blocked.'
                 if not result['application_id']:
+                    session.oragate_cfg['pool'].release(conn)
                     return False, f'Application {session.app} not found.'
                 if not result['apal']:
+                    session.oragate_cfg['pool'].release(conn)
                     return False, f'User {session.user} does not have access to {session.app}'
                 session.personal_id = result['personal_id']
             else:
+                session.oragate_cfg['pool'].release(conn)
                 return False, f'{session.user} not in personal.'
 
             cur.execute('UPDATE user_sessions SET personal_id = :personal_id, pid=:pid, protocol=:protocol, application_ver=:app_ver, '
@@ -162,6 +181,8 @@ def auth_oracle(user: str, password, session: EqmUserSession):
             session.updated = True
 
     except Exception as e:
+        if conn:
+            session.oragate_cfg['pool'].release(conn)
         return False, str(e)
     return True, conn
 
