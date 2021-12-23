@@ -8,25 +8,11 @@ import signal
 import sys
 from logging.handlers import QueueHandler, QueueListener
 
-import cx_Oracle
 import yaml
 
+import db
 from oragate import client_connected
 from pid_lock import check_lock, remove_lock
-
-
-def get_oracle_dsn(cfg: dict):
-    if 'ora_service_name' in cfg['oracle']:
-        return cx_Oracle.makedsn(cfg['oracle']['ora_host'],
-                                 cfg['oracle']['ora_port'],
-                                 service_name=cfg['oracle']['ora_service_name'])
-    elif 'ora_tns_name' in cfg['oracle']:
-        return cfg['oracle']['ora_tns_name']
-    else:
-        return cx_Oracle.makedsn(cfg['oracle']['ora_host'],
-                                 cfg['oracle']['ora_port'],
-                                 sid=cfg['oracle']['ora_sid'])
-
 
 # Args section
 parser = argparse.ArgumentParser(description='oragate v2')
@@ -42,11 +28,9 @@ parser.add_argument('--ldap_auth_only',
 args = parser.parse_args()
 cfg = yaml.safe_load(open(args.config_file))
 cfg['network']['port'] = args.port or cfg['network']['port'] or 1976
-cfg['oracle']['dsn'] = get_oracle_dsn(cfg)
+cfg['oracle']['dsn'] = db.get_oracle_dsn(cfg)
 cfg['ldap_auth_only'] = args.ldap_auth_only
 cfg['v'] = '3' or cfg['v']
-if 'pool' not in cfg['oracle']:
-    cfg['oracle']['pool'] = dict(min=1, max=-1)
 
 # log_handlers = []
 # log_file = args.log_file or cfg['logging']['filename'] if 'filename' in cfg['logging'] else None
@@ -83,7 +67,7 @@ def clean_exit(signame, loop):
 
 async def main():
     loop = asyncio.get_event_loop()
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=512)
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=2000)
     loop.set_default_executor(executor)
     # catch some termination signals
     try:
@@ -92,7 +76,7 @@ async def main():
     except NotImplementedError:
         pass
     # client_connected cb passed as partial because we need some data shared, config for example
-    server = await asyncio.start_server(functools.partial(client_connected, cfg=cfg), port=cfg['network']['port'], backlog=0)
+    server = await asyncio.start_server(functools.partial(client_connected, cfg=cfg.copy()), port=cfg['network']['port'], backlog=0)
 
     async with server:
         log.info(f'Start serving on {", ".join([s.getsockname()[0] + ":" + str(s.getsockname()[1]) for s in server.sockets])}', extra=log_extra)
@@ -100,23 +84,12 @@ async def main():
         await server.wait_closed()
     log.info('Server stopped', extra=log_extra)
 
-
 # pid lock check
 if args.lock_file:
     check_lock(args.lock_file)
-print(cfg['oracle']['pool'])
-cfg['pool'] = cx_Oracle.SessionPool(encoding='UTF-8',
-                                    homogeneous=False,
-                                    threaded=True,
-                                    min=cfg['oracle']['pool']['min'] if 'min' in cfg['oracle']['pool'] else -1,
-                                    max=cfg['oracle']['pool']['max'] if 'max' in cfg['oracle']['pool'] else -1,
-                                    getmode=cx_Oracle.SPOOL_ATTRVAL_WAIT,
-                                    increment=1,
-                                    dsn=cfg['oracle']['dsn'])
-print(cfg['pool'].min, cfg['pool'].max, cfg['pool'].opened)
+
 try:
     import uvloop
-
     uvloop.install()
     log.debug('using uvloop', extra=log_extra)
 except ImportError:

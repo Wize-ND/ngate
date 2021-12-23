@@ -44,9 +44,4 @@ async def client_connected(reader: asyncio.streams.StreamReader, writer: asyncio
 
     writer.close()
     await writer.wait_closed()
-    try:
-        if session.db_conn:
-            session.oragate_cfg['pool'].release(session.db_conn)
-    except Exception as e:
-        log.exception(e, extra=log_extra)
     log.debug(f'Closed session {session}', extra=log_extra)
