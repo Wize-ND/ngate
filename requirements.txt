@@ -1,4 +1,4 @@
-uvloop
+pydantic
 PyYAML
 psutil
 cx_Oracle

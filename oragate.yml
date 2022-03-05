@@ -1,17 +1,10 @@
 oracle:
-  ora_host: 192.168.70.204
-  ora_port: 1521
-  ora_sid: ORANGE
-  # either one of ora_sid/ora_service_name/ora_tns_name
-  # ora_service_name = service_name
-  # ora_tns_name = tns_name
+  host: 192.168.70.204
+  port: 1521
+  sid: ORANGE
+  # either one of sid/service_name/tns_name
+  # service_name = service_name
+  # tns_name = tns_name
 
-network:
-  port: 1976
+logging_level: DEBUG
 
-z_memLevel: 8
-
-logging:
-  level: INFO
-  #filename: oragate.log
-  stdout:
