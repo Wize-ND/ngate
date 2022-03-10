@@ -427,7 +427,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
 
     def auth_oracle(self):
         try:
-            conn = cx_Oracle.connect(user=self.user,
+            conn = cx_Oracle.connect(user=self.ora_user,
                                      password=self.password,
                                      encoding='UTF-8',
                                      dsn=self.cfg.oracle.dsn)
