@@ -375,17 +375,16 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
 
                         while True:
                             raw_data = lob[0].read(offset, chunk)
-                            if raw_data:
-                                data = raw_data.encode() if isinstance(raw_data, str) else raw_data
+                            data = raw_data.encode() if isinstance(raw_data, str) else raw_data
 
-                                if len(raw_data) < chunk:
-                                    data_size = max_chunk + 1 + len(data)
-                                else:
-                                    data_size = len(data)
-                                self.write_binary(data_size.to_bytes(2, 'little'))
-                                self.write_binary(data)
-                                if len(data) < chunk:
-                                    break
+                            if len(raw_data) < chunk:
+                                data_size = max_chunk + 1 + len(data)
+                            else:
+                                data_size = len(data)
+                            self.write_binary(data_size.to_bytes(2, 'little'))
+                            self.write_binary(data)
+                            if len(data) < chunk:
+                                break
                             offset += len(data)
             self.send_good_result()
 
