@@ -248,6 +248,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                     error = server_answer
                     self.log.info(f'Access denied : {self.session}; error message = "{server_answer}"', )
         else:
+            self.ora_user = self.user
             ora_success, server_answer = self.auth_oracle()
             if ora_success:
                 if not self.user.lower() == 'em':
