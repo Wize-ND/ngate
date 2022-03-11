@@ -23,6 +23,7 @@ if __name__ == '__main__':
 
     server = socketserver.ForkingTCPServer(('', cfg.port), OragateRequestHandler)
     server.cfg = cfg
+    server.max_children = 9999
     with server:
         try:
             log.info(f'Start serving on {":".join(str(i) for i in server.server_address)}')

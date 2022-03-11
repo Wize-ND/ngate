@@ -6,5 +6,12 @@ oracle:
   # service_name = service_name
   # tns_name = tns_name
 
-logging_level: DEBUG
+logging_level: INFO
 
+#ldap:
+#  host: dc02.osinform.com
+#  bind_dn: d.nechaev@osinform.com
+#  password: Wize159753
+#  base_user_dn: ou=orangesystem,dc=osinform,dc=com
+#  filter_users: (&(objectCategory=Person)(sAMAccountName={})(!(userAccountControl:1.2.840.113556.1.4.803:=2)))
+#  key: A!B!C
