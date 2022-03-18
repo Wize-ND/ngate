@@ -1,3 +1,4 @@
+import socket
 from datetime import datetime, timedelta
 import hashlib
 import logging
@@ -151,6 +152,8 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                     self.sql_handle(data)
                 elif data.startswith(('SELECT_LOB', 'UPDATE_LOB')):
                     self.lob_handle(data)
+                elif data.startswith('PROXY'):
+                    self.proxy_handle(data)
                 else:
                     self.send_bad_result()
 
@@ -496,3 +499,27 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
 
         except Exception as e:
             return str(e)
+
+    def proxy_handle(self, message: str):
+        self.log.debug(message)
+        try:
+            host, port = re.search(r'^PROXY (.+):(.+)', message).group(1)
+            conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            conn.connect((host, port))
+            self.send_good_result()
+            try:
+                while True:
+                    request = self.request.recv(self.recv_buff_size)
+                    if not request:
+                        break  # socket closed
+                    conn.sendall(request)
+                    answer = conn.recv(self.recv_buff_size)
+                    if not answer:
+                        break  # socket closed
+                    self.request.sendall(answer)
+            finally:
+                conn.close()
+
+        except Exception as e:
+            self.send_bad_result('Error proxy connection, see log for detail')
+            self.log.exception(e)
