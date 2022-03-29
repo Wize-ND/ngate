@@ -519,7 +519,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
 
         self.log.debug(message)
         try:
-            host, port = re.search(r'^PROXY (.+):(.+)', message).group(1)
+            host, port = re.search(r'PROXY (.+):(.+)', message).groups()
             proxy_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             proxy_sock.connect((host, port))
             self.send_good_result()
