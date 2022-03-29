@@ -512,18 +512,18 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                     data = sock.recv(self.recv_buff_size)
                     if not data:
                         break  # socket closed
-                    self.request.sendall(data)
+                    self.write_binary(data)
             except Exception as e:
                 self.log.exception(e)
             self.log.debug('stop proxy listner thread')
 
         self.log.debug(message)
         try:
-            host, port = re.search(r'PROXY (.+):(.+)', message).groups()
+            host, port = re.search(r'PROXY (.+):(\d+)', message).groups()
             proxy_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             proxy_sock.connect((host, int(port)))
             self.send_good_result()
-            proxy_thread = threading.Thread(target=proxy_listner, args=(proxy_sock,))
+            proxy_thread = threading.Thread(target=proxy_listner, args=(proxy_sock,), daemon=True)
             proxy_thread.start()
             try:
                 while True:
