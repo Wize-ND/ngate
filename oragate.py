@@ -1,4 +1,5 @@
 import socket
+import threading
 from datetime import datetime, timedelta
 import hashlib
 import logging
@@ -133,6 +134,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
         return data.decode()
 
     def handle(self):
+        self.request.settimeout(600)  # 10 min
         self.cfg = self.server.cfg
         self.log = logging.getLogger(self.peer_name)
         self.log.debug(f'connected')
@@ -146,12 +148,14 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
 
                 if data.startswith('LOGIN'):
                     self.doauth(data)
-                elif data.startswith('RECOVER'):
-                    self.recover_passw(data)
+                elif data.startswith('PING'):
+                    self.send_good_result()
                 elif data.startswith('SQL'):
                     self.sql_handle(data)
                 elif data.startswith(('SELECT_LOB', 'UPDATE_LOB')):
                     self.lob_handle(data)
+                elif data.startswith('RECOVER'):
+                    self.recover_passw(data)
                 elif data.startswith('PROXY'):
                     self.proxy_handle(data)
                 else:
@@ -501,24 +505,35 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             return str(e)
 
     def proxy_handle(self, message: str):
+        def proxy_listner(sock: socket.socket):
+            self.log.debug('start proxy listner thread')
+            try:
+                while True:
+                    data = sock.recv(self.recv_buff_size)
+                    if not data:
+                        break  # socket closed
+                    self.request.sendall(data)
+            except Exception as e:
+                self.log.exception(e)
+            self.log.debug('stop proxy listner thread')
+
         self.log.debug(message)
         try:
             host, port = re.search(r'^PROXY (.+):(.+)', message).group(1)
-            conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            conn.connect((host, port))
+            proxy_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            proxy_sock.connect((host, port))
             self.send_good_result()
+            proxy_thread = threading.Thread(target=proxy_listner, args=(proxy_sock,))
+            proxy_thread.start()
             try:
                 while True:
                     request = self.request.recv(self.recv_buff_size)
                     if not request:
                         break  # socket closed
-                    conn.sendall(request)
-                    answer = conn.recv(self.recv_buff_size)
-                    if not answer:
-                        break  # socket closed
-                    self.request.sendall(answer)
+                    proxy_sock.sendall(request)
             finally:
-                conn.close()
+                proxy_sock.close()
+                proxy_thread.join()
 
         except Exception as e:
             self.send_bad_result('Error proxy connection, see log for detail')
