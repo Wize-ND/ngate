@@ -521,7 +521,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
         try:
             host, port = re.search(r'PROXY (.+):(.+)', message).groups()
             proxy_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            proxy_sock.connect((host, port))
+            proxy_sock.connect((host, int(port)))
             self.send_good_result()
             proxy_thread = threading.Thread(target=proxy_listner, args=(proxy_sock,))
             proxy_thread.start()
