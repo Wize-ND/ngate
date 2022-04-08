@@ -161,10 +161,8 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                 else:
                     self.send_bad_result()
 
-        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as e:
-            self.log.error(f"disconnected {str(e)}")
         except Exception as e:
-            self.log.error(f"disconnected {str(e)}")
+            self.log.debug(f"disconnected {str(e)}")
 
     def apply_filters(self, data: bytes):
         if self.ziper:
@@ -299,8 +297,8 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             binds = binds_str.split(',') if binds_str else {}
         try:
             with self.db_conn.cursor() as cur:
-                cur.prefetchrows = 1000
-                cur.arraysize = 500
+                cur.arraysize = int(self.packet_size)
+                cur.prefetchrows = cur.arraysize + 1
                 r = cur.execute(special_decode(sql), binds)
                 if r:
                     header = '* HEADER ' + ','.join([get_column_type(*col) for col in r.description])
@@ -426,9 +424,9 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                 connect.unbind()
                 return True, objectGUID
             except ldap.INVALID_CREDENTIALS as e:
-                self.log.error(e)
                 return False, 'Неверно имя пользователя/пароль; вход в систему запрещается'
             except Exception as e:
+                self.log.error(e)
                 return False, str(e)
         else:
             return False, f'person ({self.user}) not found'
