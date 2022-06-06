@@ -44,13 +44,6 @@ def special_encode(input_str: str):
     return input_str
 
 
-def special_decode(input_str: str):
-    for c in special_chars:
-        input_str = input_str.replace(special_chars[c], c)
-    input_str = input_str.replace('\\\\', '\\')
-    return input_str.replace('\\,', ',')
-
-
 def get_column_type(name, col_type, display_size, internal_size, precision, scale, null_ok):
     name = special_encode(name)
     if col_type == cx_Oracle.DB_TYPE_NUMBER:
@@ -81,7 +74,7 @@ def gen_oracle_credentials(ldap_guid: str, key: str) -> tuple:
 
 
 def format_bind_value(in_str: str):
-    out_str = special_decode(in_str)
+    out_str = in_str.replace('\\,', ',').replace('\\\\', '\\')
     if out_str.lower() == 'null':
         return None
     if re.match(r'\d{8}_\d{6}', out_str):
@@ -131,7 +124,9 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             data.extend(packet)
             if packet.endswith(self.eof.encode()):
                 break
-        return data.decode()
+        for c in special_chars:
+            data = data.replace(special_chars[c].encode(), c.encode())
+        return data.decode('unicode_escape')
 
     def handle(self):
         self.request.settimeout(600)  # 10 min
@@ -229,7 +224,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
 
         for k, v in login_dict.items():
             if k in self.__slots__:
-                setattr(self, k, special_decode(v) if isinstance(v, str) else v)
+                setattr(self, k, v if isinstance(v, str) else v)
 
         if self.cfg.ldap:
             ldap_success, server_answer = self.auth_ldap()
@@ -275,7 +270,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
 
     def recover_passw(self, message: str):
         self.log.debug(message)
-        login = re.search(r'^RECOVER login="(\w+)"', message).group(1)
+        login = re.search(r'^RECOVER login="(\w+)"', message, re.DOTALL).group(1)
         if not login:
             self.send_bad_result('incorrect login')
             return
@@ -287,7 +282,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
 
     def sql_handle(self, message: str):
         self.log.debug(message)
-        sql, full, binds_str = re.findall('query="(.*)" bind_values(_full)?="(.*)"', message)[0]
+        sql, full, binds_str = re.findall('query="(.*)" bind_values(_full)?="(.*)"', message, re.DOTALL)[0]
         if full:
             raw_binds = re.split(r'(?<!\\),', binds_str)
             binds = dict(zip([key[1::] for key in raw_binds[::2]], [format_bind_value(value) for value in raw_binds[1::2]]))
@@ -299,7 +294,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             with self.db_conn.cursor() as cur:
                 cur.arraysize = int(self.packet_size)
                 cur.prefetchrows = cur.arraysize + 1
-                r = cur.execute(special_decode(sql), binds)
+                r = cur.execute(sql, binds)
                 if r:
                     header = '* HEADER ' + ','.join([get_column_type(*col) for col in r.description])
                     self.write_line(header)
@@ -339,9 +334,9 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
         self.log.debug(message)
         try:
             command = message[:10]
-            table = re.findall('table="([^"]*)"', message)[0]
-            field = re.findall('field="([^"]*)"', message)[0]
-            where = re.findall('where="([^"]*)"', message)[0]
+            table = re.findall('table="([^"]*)"', message, re.DOTALL)[0]
+            field = re.findall('field="([^"]*)"', message, re.DOTALL)[0]
+            where = re.findall('where="([^"]*)"', message, re.DOTALL)[0]
             with self.db_conn.cursor() as cur:
                 cur.prefetchrows = 0
                 cur.arraysize = 1
@@ -517,7 +512,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
 
         self.log.debug(message)
         try:
-            host, port = re.search(r'PROXY (.+):(\d+)', message).groups()
+            host, port = re.search(r'PROXY (.+):(\d+)', message, re.DOTALL).groups()
             proxy_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             proxy_sock.connect((host, int(port)))
             self.send_good_result()
