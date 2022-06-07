@@ -126,7 +126,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                 break
         for c in special_chars:
             data = data.replace(special_chars[c].encode(), c.encode())
-        return data.decode('unicode_escape')
+        return data.decode().replace('\\\\', '\\')
 
     def handle(self):
         self.request.settimeout(600)  # 10 min
