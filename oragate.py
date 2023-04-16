@@ -366,7 +366,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                     sql = f'SELECT {field} from {table} where {where}'
                     cur.execute(sql)
                     lob = cur.fetchone()
-                    if lob[0]:  # fix for empty lobs
+                    if lob and lob[0]:  # fix for empty lobs
                         self.write_line('* Ready')
                         offset = 1
                         max_chunk = 32767
