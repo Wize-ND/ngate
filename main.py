@@ -1,6 +1,6 @@
 import logging
 import sys
-import socketserver
+from server import Server
 
 import yaml
 from pydantic import ValidationError
@@ -16,12 +16,12 @@ if __name__ == '__main__':
         print(e)
         sys.exit(1)
 
-    logging.basicConfig(format='%(asctime)s - %(threadName)s - %(name)s - %(funcName)s - %(levelname)s: %(message)s',
+    logging.basicConfig(format='%(asctime)s - %(name)s - %(funcName)s - %(levelname)s: %(message)s',
                         stream=sys.stdout,
                         datefmt="%Y-%m-%d %H:%M:%S",
                         level=cfg.logging_level)
 
-    server = socketserver.ForkingTCPServer(('', cfg.port), OragateRequestHandler)
+    server = Server(('', cfg.port), OragateRequestHandler)
     server.cfg = cfg
     server.max_children = 9999
     with server:
