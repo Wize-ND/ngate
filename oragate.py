@@ -31,6 +31,20 @@ datatypes = {cx_Oracle.DB_TYPE_BINARY_DOUBLE: 'N',
              cx_Oracle.DB_TYPE_ROWID: 'W',
              cx_Oracle.DB_TYPE_CHAR: 'W'}
 
+disconnect_errors = \
+    ('ORA-03113',  # end-of-file on communication channel
+     'ORA-03114',  # not connected to ORACLE
+     'ORA-01012',  # not logged on
+     'ORA-02396',  # exceeded maximum idle time, please connect again.
+     'ORA-02399',  # exceeded maximum connect time, you are being logged off
+     'ORA-03135',  # connection lost contact
+     'ORA-00028',  # your session has been killed
+     'ORA-04061',  # Existing state of string has been invalidated
+     'ORA-12599',  # TNS:cryptographic checksum mismatch
+     'DPI-1080',  # connection was closed by ORA-XXXXX
+     'DPI-1010',  # not connected
+     )
+
 empty_lob = {cx_Oracle.DB_TYPE_CLOB: 'empty_clob()', cx_Oracle.DB_TYPE_BLOB: 'empty_blob()'}
 
 special_chars = {chr(n): f'\\{n:02X}' for n in range(0, 32)}
@@ -319,12 +333,15 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                     self.send_good_result()
 
         except cx_Oracle.DatabaseError as e:
+            er, = e.args
             err = str(e)
             self.log.debug(err)
             # new line char cause EM to faults
             for c in special_chars:
                 err = err.replace(c, special_chars[c])
             self.send_bad_result(err)
+            if er.code in disconnect_errors:
+                raise e  # Cause disconnect
 
         except Exception as e:
             self.log.exception(e)
@@ -390,12 +407,15 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             self.send_good_result()
 
         except cx_Oracle.DatabaseError as e:
+            er, = e.args
             err = str(e)
             self.log.debug(e)
             # new line char cause EM to faults
             for c in special_chars:
                 err = err.replace(c, special_chars[c])
             self.send_bad_result(err)
+            if er.code in disconnect_errors:
+                raise e  # Cause disconnect
 
         except Exception as e:
             self.log.exception(e)
