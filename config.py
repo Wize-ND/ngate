@@ -9,6 +9,7 @@ class Dbconfig(BaseModel):
     sid: Optional[str]
     service_name: Optional[str]
     tns_name: Optional[str]
+    sql_timeout: int = 600  # 10 min
     dsn: Any
 
     @validator('dsn', always=True)
@@ -46,6 +47,7 @@ class Ldapconfig(BaseModel):
 class Config(BaseModel):
     logging_level: Literal['DEBUG', 'INFO'] = 'DEBUG'
     port: int = 1976
+    client_timeout: int = 600  # 10 min
     oracle: Dbconfig
     ldap: Optional[Ldapconfig]
     ORAGATE_REDIRECT: Optional[str]

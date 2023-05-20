@@ -3,7 +3,6 @@ import socketserver
 
 
 class Server(socketserver.ForkingTCPServer):
-
     def __init__(self, server_address, RequestHandlerClass):
         socketserver.BaseServer.__init__(self, server_address, RequestHandlerClass)
         if socket.has_dualstack_ipv6():

@@ -5,6 +5,7 @@ oracle:
   # either one of sid/service_name/tns_name
   # service_name = service_name
   # tns_name = tns_name
+  sql_timeout: 60 # for testing
 
 logging_level: DEBUG
 

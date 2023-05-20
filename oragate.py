@@ -9,7 +9,7 @@ import socketserver
 import uuid
 import zlib
 from typing import Optional
-
+from threading import Timer
 import cx_Oracle
 import ldap
 
@@ -48,6 +48,14 @@ disconnect_errors = \
 empty_lob = {cx_Oracle.DB_TYPE_CLOB: 'empty_clob()', cx_Oracle.DB_TYPE_BLOB: 'empty_blob()'}
 
 special_chars = {chr(n): f'\\{n:02X}' for n in range(0, 32)}
+
+
+def except_hook(args):
+    exc_type, exc_value, exc_traceback, thread = args
+    logging.debug(f'Exception in {thread.name}: {str(exc_value)}')
+
+
+threading.excepthook = except_hook
 
 
 def special_encode(input_str: str):
@@ -113,7 +121,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
     # buffer size for sending packets in SQL
     buffer_size = 2 ** 17  # 128 KB
     #  amount of time (in milliseconds) that a single round-trip to the database may take before a timeout will occur.
-    call_timeout = 60 * 60 * 1000  # 1 hour
+    call_timeout = 30 * 60 * 1000  # 0.5 hour. actually, not used
     db_conn: Optional[cx_Oracle.Connection]
     ziper = None
     z_memlevel = 8
@@ -143,8 +151,8 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
         return data.decode().replace('\\\\', '\\')
 
     def handle(self):
-        self.request.settimeout(600)  # 10 min
         self.cfg = self.server.cfg
+        self.request.settimeout(self.cfg.client_timeout)
         self.log = logging.getLogger(self.peer_name)
         self.log.debug(f'connected')
         try:
@@ -295,7 +303,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
         self.send_good_result()
 
     def sql_handle(self, message: str):
-        self.log.debug(message)
+        # self.log.debug(message)
         sql, full, binds_str = re.findall('query="(.*)" bind_values(_full)?="(.*)"', message, re.DOTALL)[0]
         if full:
             raw_binds = re.split(r'(?<!\\),', binds_str)
@@ -308,7 +316,16 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             with self.db_conn.cursor() as cur:
                 cur.arraysize = int(self.packet_size)
                 cur.prefetchrows = cur.arraysize + 1
-                r = cur.execute(sql, binds)
+
+                t = Timer(self.cfg.oracle.sql_timeout, self.db_conn.cancel)
+
+                if self.user.lower() != 'em':
+                    t.start()
+                try:
+                    r = cur.execute(sql, binds)
+                finally:
+                    if t.is_alive():
+                        t.cancel()
                 if r:
                     header = '* HEADER ' + ','.join([get_column_type(*col) for col in r.description])
                     self.write_line(header)
@@ -336,11 +353,12 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             er, = e.args
             err = str(e)
             self.log.debug(err)
+            ora_error = re.search(r'^(\w{3}-\d+):.*', er.message).group(1)
             # new line char cause EM to faults
             for c in special_chars:
                 err = err.replace(c, special_chars[c])
             self.send_bad_result(err)
-            if er.code in disconnect_errors:
+            if ora_error in disconnect_errors:
                 raise e  # Cause disconnect
 
         except Exception as e:
@@ -348,7 +366,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             self.send_bad_result('internal error')
 
     def lob_handle(self, message):
-        self.log.debug(message)
+        # self.log.debug(message)
         try:
             command = message[:10]
             table = re.findall('table="([^"]*)"', message, re.DOTALL)[0]
@@ -451,6 +469,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             conn = cx_Oracle.connect(user=self.ora_user,
                                      password=self.password,
                                      encoding='UTF-8',
+                                     threaded=True,
                                      dsn=self.cfg.oracle.dsn)
 
             if self.user.lower() == 'em':
