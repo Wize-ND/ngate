@@ -16,6 +16,7 @@ if __name__ == '__main__':
         print(e)
         sys.exit(1)
 
+    logging.addLevelName(19, 'DEBUG_CONN')
     logging.basicConfig(format='%(asctime)s - %(name)s - %(funcName)s - %(levelname)s: %(message)s',
                         stream=sys.stdout,
                         datefmt="%Y-%m-%d %H:%M:%S",

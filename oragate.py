@@ -154,7 +154,6 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
         self.cfg = self.server.cfg
         self.request.settimeout(self.cfg.client_timeout)
         self.log = logging.getLogger(self.peer_name)
-        self.log.debug(f'connected')
         try:
             while True:
                 data = self.readcommand()
@@ -179,7 +178,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                     self.send_bad_result()
 
         except Exception as e:
-            self.log.debug(f"disconnected {str(e)}")
+            self.log.log(19, f"disconnected {e}")
 
     def apply_filters(self, data: bytes):
         if self.ziper:
@@ -281,6 +280,9 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                 self.log.info(f'Access denied : {self.session}; error message = "{server_answer}"')
 
         if not error:
+            if self.app == 'EM.Starter':
+                self.request.settimeout(None)
+
             if 'zlib' in self.required_filters:
                 self.write_line('* FILTER zlib')
                 self.send_good_result(message)
@@ -350,16 +352,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                     self.send_good_result()
 
         except cx_Oracle.DatabaseError as e:
-            er, = e.args
-            err = str(e)
-            self.log.debug(err)
-            ora_error = re.search(r'^(\w{3}-\d+):.*', er.message).group(1)
-            # new line char cause EM to faults
-            for c in special_chars:
-                err = err.replace(c, special_chars[c])
-            self.send_bad_result(err)
-            if ora_error in disconnect_errors:
-                raise e  # Cause disconnect
+            self.handle_oracle_error(e)
 
         except Exception as e:
             self.log.exception(e)
@@ -425,15 +418,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             self.send_good_result()
 
         except cx_Oracle.DatabaseError as e:
-            er, = e.args
-            err = str(e)
-            self.log.debug(e)
-            # new line char cause EM to faults
-            for c in special_chars:
-                err = err.replace(c, special_chars[c])
-            self.send_bad_result(err)
-            if er.code in disconnect_errors:
-                raise e  # Cause disconnect
+            self.handle_oracle_error(e)
 
         except Exception as e:
             self.log.exception(e)
@@ -570,3 +555,15 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
         except Exception as e:
             self.send_bad_result('Error proxy connection, see log for detail')
             self.log.exception(e)
+
+    def handle_oracle_error(self, e: cx_Oracle.DatabaseError):
+        er, = e.args
+        err = str(e)
+        self.log.debug(err)
+        ora_error = re.search(r'^(\w{3}-\d+):.*', er.message).group(1)
+        # new line char cause EM to faults
+        for c in special_chars:
+            err = err.replace(c, special_chars[c])
+        self.send_bad_result(err)
+        if ora_error in disconnect_errors:
+            raise e  # Cause disconnect

@@ -1,10 +1,11 @@
+import os
 import socket
-import socketserver
+import socketserver as s
 
 
-class Server(socketserver.ForkingTCPServer):
+class Server(s.ForkingTCPServer if hasattr(os, "fork") else s.ThreadingTCPServer):
     def __init__(self, server_address, RequestHandlerClass):
-        socketserver.BaseServer.__init__(self, server_address, RequestHandlerClass)
+        s.BaseServer.__init__(self, server_address, RequestHandlerClass)
         if socket.has_dualstack_ipv6():
             self.socket = socket.create_server(server_address, family=socket.AF_INET6, dualstack_ipv6=True)
         else:

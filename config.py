@@ -45,7 +45,7 @@ class Ldapconfig(BaseModel):
 
 
 class Config(BaseModel):
-    logging_level: Literal['DEBUG', 'INFO'] = 'DEBUG'
+    logging_level: str = 'INFO'
     port: int = 1976
     client_timeout: int = 600  # 10 min
     oracle: Dbconfig
