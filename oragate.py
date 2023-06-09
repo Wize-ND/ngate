@@ -49,6 +49,8 @@ empty_lob = {cx_Oracle.DB_TYPE_CLOB: 'empty_clob()', cx_Oracle.DB_TYPE_BLOB: 'em
 
 special_chars = {chr(n): f'\\{n:02X}' for n in range(0, 32)}
 
+ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
+
 
 def except_hook(args):
     exc_type, exc_value, exc_traceback, thread = args
@@ -426,7 +428,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
 
     def auth_ldap(self):
         ldap_filter = self.cfg.ldap.filter_users.format(self.user)
-        connect = ldap.initialize(f'ldap://{self.cfg.ldap.host}')
+        connect = ldap.initialize(self.cfg.ldap.host)
         connect.set_option(ldap.OPT_REFERRALS, 0)
         connect.simple_bind_s(self.cfg.ldap.bind_dn, self.cfg.ldap.password)
         answers = connect.search_s(self.cfg.ldap.base_user_dn, ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'])
