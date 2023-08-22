@@ -1,3 +1,4 @@
+import pprint
 import socket
 import threading
 from datetime import datetime, timedelta
@@ -427,11 +428,16 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             self.send_bad_result('internal error')
 
     def auth_ldap(self):
-        ldap_filter = self.cfg.ldap.filter_users.format(self.user)
-        connect = ldap.initialize(self.cfg.ldap.host)
-        connect.set_option(ldap.OPT_REFERRALS, 0)
-        connect.simple_bind_s(self.cfg.ldap.bind_dn, self.cfg.ldap.password)
-        answers = connect.search_s(self.cfg.ldap.base_user_dn, ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'])
+        try:
+            ldap_filter = self.cfg.ldap.filter_users.format(self.user)
+            connect = ldap.initialize(self.cfg.ldap.host)
+            connect.set_option(ldap.OPT_REFERRALS, 0)
+            connect.simple_bind_s(self.cfg.ldap.bind_dn, self.cfg.ldap.password)
+            answers = connect.search_s(self.cfg.ldap.base_user_dn, ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'])
+        except ldap.LDAPError as e:
+            self.log.error(e)
+            return False, f'Ldap initialize/bind DN={self.cfg.ldap.bind_dn}\nServer returned error:\n{pprint.pformat(e)}'
+
         user_found = None
         for answer in answers:
             if answer[0] is not None:
