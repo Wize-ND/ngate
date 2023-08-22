@@ -436,7 +436,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             answers = connect.search_s(self.cfg.ldap.base_user_dn, ldap.SCOPE_SUBTREE, ldap_filter, ['ObjectGUID'])
         except ldap.LDAPError as e:
             self.log.error(e)
-            return False, f'Ldap initialize/bind DN={self.cfg.ldap.bind_dn}\nServer returned error:\n{pprint.pformat(e)}'
+            return False, f'Ldap initialize/bind DN={self.cfg.ldap.bind_dn} server returned error: {e}'
 
         user_found = None
         for answer in answers:
