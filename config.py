@@ -51,3 +51,6 @@ class Config(BaseModel):
     oracle: Dbconfig
     ldap: Optional[Ldapconfig]
     ORAGATE_REDIRECT: Optional[str]
+    worker_processes: int = 4
+    protocol_version: str = 'v3_proto'
+    z_memlevel: int = 8

@@ -22,9 +22,7 @@ if __name__ == '__main__':
                         datefmt="%Y-%m-%d %H:%M:%S",
                         level=cfg.logging_level)
 
-    server = Server(('', cfg.port), OragateRequestHandler)
-    server.cfg = cfg
-    server.max_children = 9999
+    server = Server(cfg=cfg, handle_func=OragateRequestHandler)
     with server:
         try:
             log.info(f'Start serving on {":".join(str(i) for i in server.server_address)}')

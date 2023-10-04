@@ -110,11 +110,12 @@ def format_bind_value(in_str: str):
         return out_str
 
 
-class OragateRequestHandler(socketserver.BaseRequestHandler):
+class OragateRequestHandler:
     # user attrs
     __slots__ = ('user', 'ora_user', 'password', 'app', 'ldap_guid', 'version', 'required_filters', 'desired_filters', 'local_ip',
                  'peer_ip', 'peer_port', 'app_session_id', 'session_id', 'personal_id', 'packet_size')
     cfg: Config
+
     recv_buff_size = 2 ** 13  # 8 KiB
     # End of response to successfully processed request.
     _good_result = '+OK'
@@ -123,19 +124,15 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
     eof = '\r\n'
     # buffer size for sending packets in SQL
     buffer_size = 2 ** 17  # 128 KB
-    #  amount of time (in milliseconds) that a single round-trip to the database may take before a timeout will occur.
-    call_timeout = 30 * 60 * 1000  # 0.5 hour. actually, not used
     db_conn: Optional[cx_Oracle.Connection]
     ziper = None
     z_memlevel = 8
     log: logging.Logger
     protocol_version = 'v3_proto'
 
-    @property
     def session(self):
         return f'user = {self.user}; application = {self.app}; filters = {self.required_filters}; remote host = {self.local_ip}'
 
-    @property
     def peer_name(self):
         return ':'.join(str(i) for i in self.client_address)
 
