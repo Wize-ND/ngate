@@ -15,7 +15,10 @@ RUN  microdnf install oracle-instantclient-release-el8 && \
 
 WORKDIR /
 
-COPY . .
+COPY *.py /
+COPY requirements.txt /
+COPY ldap.ora /usr/lib/oracle/21/client64/lib/network/admin/ldap.ora
+COPY sqlnet.ora /usr/lib/oracle/21/client64/lib/network/admin/sqlnet.ora
 
 RUN python3 -m pip install --no-cache-dir -r requirements.txt
 

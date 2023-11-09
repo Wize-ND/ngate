@@ -1,9 +1,9 @@
-import pprint
 import socket
 import threading
 from datetime import datetime, timedelta
 import hashlib
 import logging
+import logging.handlers
 import os
 import re
 import socketserver
@@ -11,10 +11,14 @@ import uuid
 import zlib
 from typing import Optional
 from threading import Timer
-import cx_Oracle
+import oracledb as cx_Oracle
 import ldap
 
 from config import Config
+
+# lib_dir = r'C:\instantclient_21_3'
+lib_dir = r'/usr/lib/oracle/21/client64/lib'
+cx_Oracle.init_oracle_client(lib_dir)
 
 datatypes = {cx_Oracle.DB_TYPE_BINARY_DOUBLE: 'N',
              cx_Oracle.DB_TYPE_BINARY_FLOAT: 'N',
@@ -44,6 +48,7 @@ disconnect_errors = \
      'ORA-12599',  # TNS:cryptographic checksum mismatch
      'DPI-1080',  # connection was closed by ORA-XXXXX
      'DPI-1010',  # not connected
+     'DPY-4011',  # the database or network closed the connection
      )
 
 empty_lob = {cx_Oracle.DB_TYPE_CLOB: 'empty_clob()', cx_Oracle.DB_TYPE_BLOB: 'empty_blob()'}
@@ -112,8 +117,9 @@ def format_bind_value(in_str: str):
 
 class OragateRequestHandler(socketserver.BaseRequestHandler):
     # user attrs
-    __slots__ = ('user', 'ora_user', 'password', 'app', 'ldap_guid', 'version', 'required_filters', 'desired_filters', 'local_ip',
-                 'peer_ip', 'peer_port', 'app_session_id', 'session_id', 'personal_id', 'packet_size')
+    __slots__ = (
+    'user', 'ora_user', 'password', 'app', 'ldap_guid', 'version', 'required_filters', 'desired_filters', 'local_ip',
+    'peer_ip', 'peer_port', 'app_session_id', 'session_id', 'personal_id', 'packet_size')
     cfg: Config
     recv_buff_size = 2 ** 13  # 8 KiB
     # End of response to successfully processed request.
@@ -139,6 +145,15 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
     def peer_name(self):
         return ':'.join(str(i) for i in self.client_address)
 
+    def start_session_log(self):
+        self.log.handlers.clear()
+        h = logging.FileHandler(filename=f'session_logs/{self.session_id}.log')
+        h.setFormatter(logging.Formatter('%(asctime)s - %(process)d - %(funcName)s - %(message)s', "%Y-%m-%d %H:%M:%S"))
+        self.log.addHandler(h)
+
+        self.log.setLevel('DEBUG')
+        self.log.propagate = False
+
     def readcommand(self):
         # Helper function to recv until eof
         data = bytearray()
@@ -161,12 +176,15 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             while True:
                 data = self.readcommand()
                 if not data:
-                    self.log.debug('disconnected')
+                    self.log.debug('disconnected normally')
                     break
-                self.log.debug(f'received {data=}')
+                self.log.debug(f'rx: {data.__repr__()}')
 
                 if data.startswith('LOGIN'):
                     self.doauth(data)
+                    if self.cfg.session_logs and self.user.lower() != 'em':
+                        self.start_session_log()
+                        self.log.debug(f'{self.session} session_id={self.session_id} personal_id={self.personal_id}')
                 elif data.startswith('PING'):
                     self.send_good_result()
                 elif data.startswith('SQL'):
@@ -180,8 +198,9 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                 else:
                     self.send_bad_result()
 
-        except Exception as e:
-            self.log.log(19, f"disconnected {e}")
+        except BaseException as e:
+            self.log.log(19, f"disconnected: {e}")
+            self.send_bad_result(str(e))
 
     def apply_filters(self, data: bytes):
         if self.ziper:
@@ -261,16 +280,17 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                     self.log.info(f'Access denied : {self.session}; error message = "{server_answer}"')
             else:
                 if ldap_success:
-                    self.log.info(f'Successful ldap login : {self.session}')
                     self.ora_user, self.password = gen_oracle_credentials(server_answer, self.cfg.ldap.key)
                     ora_success, server_answer = self.auth_oracle()
                     if ora_success:
                         self.db_conn = server_answer
+                        self.log.info(f'Successful ldap login : {self.session}')
                     else:
                         error = server_answer
+                        self.log.info(f'Unsuccessful ldap login : {self.session}; error message = "{server_answer}"')
                 else:
                     error = server_answer
-                    self.log.info(f'Access denied : {self.session}; error message = "{server_answer}"', )
+                    self.log.info(f'Access denied : {self.session}; error message = "{server_answer}"')
         else:
             self.ora_user = self.user
             ora_success, server_answer = self.auth_oracle()
@@ -284,16 +304,18 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
 
         if not error:
             if self.app == 'EM.Starter':
-                self.request.settimeout(None)
+                self.request.settimeout(28800)  # 8h
 
             if 'zlib' in self.required_filters:
                 self.write_line('* FILTER zlib')
                 self.send_good_result(message)
-                self.ziper = zlib.compressobj(zlib.Z_BEST_SPEED, zlib.DEFLATED, zlib.MAX_WBITS, memLevel=self.z_memlevel)
+                self.ziper = zlib.compressobj(zlib.Z_BEST_SPEED, zlib.DEFLATED, zlib.MAX_WBITS,
+                                              memLevel=self.z_memlevel)
             else:
                 self.send_good_result(message)
         else:
             self.send_bad_result(error)
+            raise AssertionError('Not logged in')
 
     def recover_passw(self, message: str):
         self.log.debug(message)
@@ -306,13 +328,14 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
         if error:
             self.send_bad_result(error)
         self.send_good_result()
+        self.log.debug('tx sent')
 
     def sql_handle(self, message: str):
-        # self.log.debug(message)
         sql, full, binds_str = re.findall('query="(.*)" bind_values(_full)?="(.*)"', message, re.DOTALL)[0]
         if full:
             raw_binds = re.split(r'(?<!\\),', binds_str)
-            binds = dict(zip([key[1::] for key in raw_binds[::2]], [format_bind_value(value) for value in raw_binds[1::2]]))
+            binds = dict(
+                zip([key[1::] for key in raw_binds[::2]], [format_bind_value(value) for value in raw_binds[1::2]]))
         else:
             for i in range(len(re.findall('\?', sql))):
                 sql = sql.replace('?', f':{i}', 1)
@@ -349,11 +372,11 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                             buffer += self.wrap_line(f'* {row}').encode()
                     if buffer:
                         self.write_binary(buffer)
-                    # del buffer
+                    del buffer, rows, r
                 else:
                     self.write_line(f'* {str(cur.rowcount)}')
                     self.send_good_result()
-
+            self.log.debug('tx sent')
         except cx_Oracle.DatabaseError as e:
             self.handle_oracle_error(e)
 
@@ -419,7 +442,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                                 break
                             offset += len(data)
             self.send_good_result()
-
+            self.log.debug('tx sent')
         except cx_Oracle.DatabaseError as e:
             self.handle_oracle_error(e)
 
@@ -441,7 +464,8 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
         user_found = None
         for answer in answers:
             if answer[0] is not None:
-                user_found, user_dn, objectGUID = True, answer[0], uuid.UUID(bytes_le=answer[1]['objectGUID'][0]).hex.upper()
+                user_found, user_dn, objectGUID = True, answer[0], uuid.UUID(
+                    bytes_le=answer[1]['objectGUID'][0]).hex.upper()
                 break
 
         if user_found:
@@ -450,7 +474,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                 connect.unbind()
                 return True, objectGUID
             except ldap.INVALID_CREDENTIALS as e:
-                return False, 'Неверно имя пользователя/пароль; вход в систему запрещается'
+                return False, 'ORA-01017: Неверно имя пользователя/пароль; вход в систему запрещается'
             except Exception as e:
                 self.log.error(e)
                 return False, str(e)
@@ -463,6 +487,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                                      password=self.password,
                                      encoding='UTF-8',
                                      threaded=True,
+                                     stmtcachesize=0,
                                      dsn=self.cfg.oracle.dsn)
 
             if self.user.lower() == 'em':
@@ -470,9 +495,11 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             with conn.cursor() as cur:
                 cur.prefetchrows = 1
                 cur.arraysize = 1
-                r = cur.execute('SELECT session_id FROM user_sessions WHERE session_id = (SELECT get_session_id FROM dual)')
+                r = cur.execute(
+                    'SELECT session_id FROM user_sessions WHERE session_id = (SELECT get_session_id FROM dual)')
                 if r:
                     self.session_id = r.fetchall()[0][0]
+                    self.log.name += f' {self.session_id}'
                 else:
                     return True, conn
 
@@ -498,15 +525,19 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                     if not result['apal']:
                         return False, f'User {self.user} does not have access to {self.app}'
                     self.personal_id = result['personal_id']
+                    self.log.name += f':{self.personal_id}'
                 else:
                     return False, f'{self.user} not in personal.'
 
-                cur.execute('UPDATE user_sessions SET personal_id = :personal_id, pid=:pid, protocol=:protocol, application_ver=:app_ver, '
-                            'application_id = (SELECT application_id FROM applications WHERE name=:app), foreign_ip=:peer_name, local_ip=:local_ip, '
-                            'session_guid=:app_session_id WHERE session_id=:session_id',
-                            {'personal_id': self.personal_id, 'pid': os.getpid(), 'protocol': self.protocol_version, 'app_ver': self.version,
-                             'app': self.app, 'peer_name': self.peer_name, 'local_ip': self.local_ip, 'app_session_id': self.app_session_id,
-                             'session_id': self.session_id})
+                cur.execute(
+                    'UPDATE user_sessions SET personal_id = :personal_id, pid=:pid, protocol=:protocol, application_ver=:app_ver, '
+                    'application_id = (SELECT application_id FROM applications WHERE name=:app), foreign_ip=:peer_name, local_ip=:local_ip, '
+                    'session_guid=:app_session_id WHERE session_id=:session_id',
+                    {'personal_id': self.personal_id, 'pid': os.getpid(), 'protocol': self.protocol_version,
+                     'app_ver': self.version,
+                     'app': self.app, 'peer_name': self.peer_name, 'local_ip': self.local_ip,
+                     'app_session_id': self.app_session_id,
+                     'session_id': self.session_id})
                 conn.commit()
 
         except Exception as e:
@@ -515,7 +546,8 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
 
     def recover_oracle(self):
         try:
-            with cx_Oracle.connect(user='em', password='em_server_access', dsn=self.cfg.oracle.dsn, encoding="UTF-8") as conn:
+            with cx_Oracle.connect(user='em', password='em_server_access', dsn=self.cfg.oracle.dsn,
+                                   encoding="UTF-8") as conn:
                 with conn.cursor() as cur:
                     cur.execute('BEGIN os_lib.asys_utils.p_change_password(:login); END;', login=self.user)
                     conn.commit()
@@ -542,7 +574,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
                 self.log.exception(e)
             self.log.debug('stop proxy listner thread')
 
-        self.log.debug(message)
+        # self.log.debug(message)
         try:
             host, port = re.search(r'PROXY (.+):(\d+)', message, re.DOTALL).groups()
             proxy_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -559,7 +591,7 @@ class OragateRequestHandler(socketserver.BaseRequestHandler):
             finally:
                 proxy_sock.close()
                 proxy_thread.join()
-
+            self.log.debug('tx sent')
         except Exception as e:
             self.send_bad_result('Error proxy connection, see log for detail')
             self.log.exception(e)

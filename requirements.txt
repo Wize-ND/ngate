@@ -1,5 +1,5 @@
 pydantic==1.10.11
 PyYAML
 psutil
-cx_Oracle
+oracledb
 python-ldap

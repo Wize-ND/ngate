@@ -7,8 +7,8 @@ oracle:
   # tns_name = tns_name
   sql_timeout: 60 # for testing
 
-logging_level: DEBUG
-
+logging_level: DEBUG_CONN
+session_logs: True
 #ldap:
 #  host: dc02.osinform.com
 #  bind_dn: d.nechaev@osinform.com

@@ -1,5 +1,5 @@
 from typing import Literal, Optional, Any
-from cx_Oracle import makedsn
+from oracledb import makedsn
 from pydantic import BaseModel, validator
 
 
@@ -46,6 +46,7 @@ class Ldapconfig(BaseModel):
 
 class Config(BaseModel):
     logging_level: str = 'INFO'
+    session_logs: bool = False
     port: int = 1976
     client_timeout: int = 600  # 10 min
     oracle: Dbconfig
